@@ -1,0 +1,49 @@
+{
+  "name": "react-native-telegram-tabbar",
+  "version": "0.2.7",
+  "description": "Native Android bottom tab bar inspired by Telegram, built with Expo Modules API. Custom Kotlin ViewGroup with Canvas drawing, sliding indicator, Material ripple, badge animations. 60fps, zero-alloc onDraw.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "author": "milautonomos",
+  "license": "MIT",
+  "keywords": [
+    "react-native",
+    "expo",
+    "expo-module",
+    "tab-bar",
+    "bottom-tabs",
+    "telegram",
+    "android",
+    "kotlin",
+    "native",
+    "navigation",
+    "canvas",
+    "material-design",
+    "fabric",
+    "new-architecture"
+  ],
+  "files": [
+    "src/",
+    "android/src/",
+    "android/build.gradle",
+    "expo-module.config.json"
+  ],
+  "scripts": {
+    "prepublishOnly": "echo 'Ready to publish'"
+  },
+  "peerDependencies": {
+    "expo": ">=50.0.0",
+    "react": ">=18.0.0",
+    "react-native": ">=0.73.0",
+    "react-native-safe-area-context": ">=4.0.0",
+    "@react-navigation/bottom-tabs": ">=7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native-safe-area-context": {
+      "optional": false
+    },
+    "@react-navigation/bottom-tabs": {
+      "optional": false
+    }
+  }
+}

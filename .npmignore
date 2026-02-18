@@ -1,0 +1,18 @@
+# Build artifacts
+android/build/
+android/.gradle/
+android/.cxx/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dev
+tsconfig.json
+*.test.ts
+*.test.tsx
+__tests__/
