@@ -1,27 +1,26 @@
-apply plugin: 'com.android.library'
-apply plugin: 'org.jetbrains.kotlin.android'
-
-group = 'expo.modules.telegramtabbar'
-version = '0.1.0'
-
-def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
-if (expoModulesCorePlugin.exists()) {
-  apply from: expoModulesCorePlugin
-  applyKotlinExpoModulesCorePlugin()
+buildscript {
+  ext.kotlin_version = '1.9.22'
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath 'com.android.tools.build:gradle:8.1.4'
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+  }
 }
 
-android {
-  namespace "expo.modules.telegramtabbar"
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
 
-  compileSdkVersion safeExtGet("compileSdkVersion", 35)
+android {
+  namespace 'com.margelo.telegramtabbar'
+  compileSdk 35
 
   defaultConfig {
-    minSdkVersion safeExtGet("minSdkVersion", 24)
-    targetSdkVersion safeExtGet("targetSdkVersion", 35)
-  }
-
-  buildFeatures {
-    buildConfig true
+    minSdk 24
+    targetSdk 35
+    consumerProguardFiles 'proguard-rules.pro'
   }
 
   compileOptions {
@@ -30,12 +29,23 @@ android {
   }
 
   kotlinOptions {
-    jvmTarget = "17"
+    jvmTarget = '17'
+  }
+
+  sourceSets {
+    main {
+      java.srcDirs += ['src/main/kotlin']
+    }
   }
 }
 
+repositories {
+  google()
+  mavenCentral()
+}
+
 dependencies {
-  implementation project(':expo-modules-core')
-  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7"
+  implementation 'com.facebook.react:react-native'
+  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
   implementation "androidx.core:core-ktx:1.15.0"
 }

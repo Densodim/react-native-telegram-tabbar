@@ -1,0 +1,16 @@
+{
+  "cxxNamespace": ["margelo", "telegramtabbar"],
+  "ios": {
+    "iosModuleName": "NitroTelegramTabBar"
+  },
+  "android": {
+    "androidNamespace": ["com", "margelo", "telegramtabbar"],
+    "androidCxxLibName": "NitroTelegramTabBar"
+  },
+  "autolinking": {
+    "TelegramTabBar": {
+      "swift": "HybridTelegramTabBar",
+      "kotlin": "HybridTelegramTabBar"
+    }
+  }
+}

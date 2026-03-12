@@ -1,0 +1,19 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["margelo", "nitro", "telegramtabbar"],
+  "outputDirectory": "./nitrogen",
+  "specs": ["./src/specs"],
+  "ios": {
+    "iosModuleName": "NitroTelegramTabBar"
+  },
+  "android": {
+    "androidNamespace": ["com", "margelo", "telegramtabbar"],
+    "androidCxxLibName": "NitroTelegramTabBar"
+  },
+  "autolinking": {
+    "TelegramTabBar": {
+      "swift": "HybridTelegramTabBar",
+      "kotlin": "HybridTelegramTabBar"
+    }
+  }
+}
