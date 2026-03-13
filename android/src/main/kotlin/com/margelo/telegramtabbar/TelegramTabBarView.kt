@@ -6,7 +6,6 @@ import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
@@ -15,13 +14,11 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
-import android.os.Build
+import android.graphics.drawable.GradientDrawable
+import android.graphics.Rect
 import android.text.TextPaint
 import android.util.TypedValue
 import android.view.Gravity
@@ -29,7 +26,6 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
-import android.view.ViewTreeObserver
 import android.view.animation.OvershootInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
@@ -40,6 +36,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.PathParser
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.qmdeve.blurview.widget.BlurView
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -86,8 +83,9 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
 
     private data class TabViewHolder(
         val wrapper: FrameLayout,
+        val cardView: View,          // White card bg — always MATCH_PARENT + margins, just toggled visible/invisible
         val column: LinearLayout,
-        val iconView: View,  // Can be ImageView or SvgIconView
+        val iconView: View,          // Can be ImageView or SvgIconView
         val labelView: TextView
     )
 
@@ -97,7 +95,7 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     private var dotBadges: Set<String> = emptySet()
 
     // Theme
-    private var bgColor: Int = Color.WHITE
+    private var bgColor: Int = Color.BLACK
     private var activeColor: Int = Color.parseColor("#007AFF")
     private var inactiveColor: Int = Color.parseColor("#3C3C43")
     private var indicatorColor: Int = Color.parseColor("#007AFF")
@@ -106,14 +104,18 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     private val density = context.resources.displayMetrics.density
     private val floatingMarginH = (16 * density).roundToInt()
     private val floatingMarginBottom = (12 * density).roundToInt()
-    private val cornerRadius = (24 * density)
-    private val tabBarHeight = (56 * density).roundToInt()
+    private val cornerRadius = (16 * density)
+    private val tabBarHeight = (60 * density).roundToInt()
     private val elevationDp = (8 * density)
     private val indicatorHeight = (3 * density)
     private val indicatorTopRadius = (1.5f * density)
-    private val iconSizePx = (26 * density).roundToInt()
-    private val badgeRadius = (8 * density)
+    private val iconSizePx = (24 * density).roundToInt()
+    private val badgeRadius = (4 * density)
     private val badgeTextSize = 10f * density
+    private val activeCardCornerRadius = (10 * density)
+    private val activeCardPaddingH = (10 * density).roundToInt()
+    private val activeCardPaddingV = (6 * density).roundToInt()
+    private val activeCardMargin = (6 * density).roundToInt()
     private val badgeOffsetX = (12 * density)
     private val badgeOffsetY = (4 * density)
     private val badgeMinWidth = (16 * density)
@@ -140,7 +142,17 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     }
 
     // ── Layers ──────────────────────────────────────────────────────────
-    private val blurBackground = BlurBackgroundView(context)
+    // Layer 0: pill blur background (rounded capsule)
+    private val blurBackground = BlurView(context, null).also { v ->
+        v.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
+            }
+        }
+        v.clipToOutline = true
+        v.elevation = elevationDp
+    }
+
     private val contentOverlay = ContentOverlayView(context)
 
     var onTabPress: ((String) -> Unit)? = null
@@ -151,7 +163,7 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         clipChildren = false
         clipToPadding = false
 
-        // Layer 1: blur background
+        // Layer 0: blur background
         addView(blurBackground, LayoutParams(
             LayoutParams.MATCH_PARENT, tabBarHeight
         ).apply {
@@ -182,14 +194,21 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        // Force inset dispatch — in edge-to-edge mode, insets may have been
-        // consumed by parent views before this view was added to the hierarchy.
         ViewCompat.requestApplyInsets(this)
+        setupBlur()
+    }
+
+    private fun setupBlur() {
+        blurBackground.setBlurRadius(20f)
+        blurBackground.setCornerRadius(cornerRadius)
+        blurBackground.setOverlayColor(
+            Color.argb(0xA3, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor))
+        )
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        blurBackground.cleanup()
+        blurBackground.release()
     }
 
     private fun updateMargins() {
@@ -237,7 +256,9 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     fun setThemeColors(bg: Int, active: Int, inactive: Int, indicator: Int) {
         android.util.Log.d("TelegramTabBar", "setThemeColors active=${String.format("#%06X", active and 0xFFFFFF)} inactive=${String.format("#%06X", inactive and 0xFFFFFF)} bg=${String.format("#%06X", bg and 0xFFFFFF)}")
         bgColor = bg; activeColor = active; inactiveColor = inactive; indicatorColor = indicator
-        blurBackground.updateBgColor()
+        blurBackground.setOverlayColor(
+            Color.argb(0xA3, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor))
+        )
         contentOverlay.updateTabAppearance()
         contentOverlay.invalidate()
     }
@@ -282,158 +303,6 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
             MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
         )
     }
-
-    // ═════════════════════════════════════════════════════════════════════
-    // ═══ Layer 1: Blur Background ════════════════════════════════════════
-    // ═════════════════════════════════════════════════════════════════════
-
-    /**
-     * Layer 1: Blur background — provides the frosted glass look.
-     *
-     * API 31+ (Android 12): Captures a bitmap of content behind the bar,
-     *   scales it down 4×, and applies RenderEffect.createBlurEffect for
-     *   real-time Gaussian blur. A semi-transparent tint overlay provides
-     *   contrast for the icons.
-     *
-     * API < 31:  Falls back to a high-opacity solid fill (no blur, but icons
-     *   remain fully readable because the background is nearly opaque).
-     */
-    inner class BlurBackgroundView(context: Context) : FrameLayout(context) {
-        private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        private val bgRect = RectF()
-
-        // Snapshot view — shows blurred capture of content behind the bar
-        private val blurImageView = ImageView(context).apply {
-            scaleType = ImageView.ScaleType.FIT_XY
-            visibility = View.GONE
-        }
-        private var blurBitmap: Bitmap? = null
-        private val blurRadiusPx = 25f
-
-        // Throttle captures for performance
-        private val captureIntervalMs = 80L
-        private var lastCaptureTime = 0L
-        private var isCapturing = false
-
-        private val preDrawListener = ViewTreeObserver.OnPreDrawListener {
-            throttledCapture()
-            true
-        }
-
-        init {
-            outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
-                }
-            }
-            clipToOutline = true
-            elevation = elevationDp
-            setWillNotDraw(false)
-
-            addView(blurImageView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-            updateBgColor()
-        }
-
-        override fun onAttachedToWindow() {
-            super.onAttachedToWindow()
-            rootView.viewTreeObserver.addOnPreDrawListener(preDrawListener)
-        }
-
-        override fun onDetachedFromWindow() {
-            super.onDetachedFromWindow()
-            rootView.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
-        }
-
-        fun updateBgColor() {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // On API 31+ we show blurred content + light tint overlay
-                tintPaint.color = Color.argb(
-                    0xE8, // ~72% opaque tint — lets blur show through while keeping contrast
-                    Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)
-                )
-            } else {
-                // Pre-API 31: solid fill, slightly translucent for glass feel
-                tintPaint.color = Color.argb(
-                    0xF0, // ~94% opaque — nearly solid for readability without blur
-                    Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)
-                )
-            }
-            invalidate()
-        }
-
-        private fun throttledCapture() {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-            if (isCapturing) return
-            val now = System.currentTimeMillis()
-            if (now - lastCaptureTime < captureIntervalMs) return
-            lastCaptureTime = now
-            captureAndBlur()
-        }
-
-        private fun captureAndBlur() {
-            if (width == 0 || height == 0) return
-            val root = rootView ?: return
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-            isCapturing = true
-
-            val loc = IntArray(2)
-            getLocationInWindow(loc)
-            val left = loc[0]
-            val top = loc[1]
-
-            // Down-scale 4× for performance
-            val scale = 0.25f
-            val scaledW = (width * scale).toInt().coerceAtLeast(1)
-            val scaledH = (height * scale).toInt().coerceAtLeast(1)
-
-            try {
-                val bmp = Bitmap.createBitmap(scaledW, scaledH, Bitmap.Config.ARGB_8888)
-                val c = Canvas(bmp)
-                c.scale(scale, scale)
-                c.translate(-left.toFloat(), -top.toFloat())
-
-                // Hide both layers during capture to avoid feedback loop
-                // and prevent icons from bleeding into the blur bitmap
-                val savedBgVis = visibility
-                val savedContentVis = contentOverlay.visibility
-                visibility = View.INVISIBLE
-                contentOverlay.visibility = View.INVISIBLE
-                root.draw(c)
-                visibility = savedBgVis
-                contentOverlay.visibility = savedContentVis
-
-                blurImageView.setImageBitmap(bmp)
-                blurImageView.setRenderEffect(
-                    RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP)
-                )
-                blurImageView.visibility = View.VISIBLE
-
-                blurBitmap?.recycle()
-                blurBitmap = bmp
-            } catch (_: Exception) {
-                blurImageView.visibility = View.GONE
-            }
-            isCapturing = false
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            // Tinted overlay on top of blurred capture
-            bgRect.set(0f, 0f, width.toFloat(), height.toFloat())
-            canvas.drawRoundRect(bgRect, cornerRadius, cornerRadius, tintPaint)
-        }
-
-        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-            super.onSizeChanged(w, h, oldw, oldh)
-            if (w > 0 && h > 0) post { captureAndBlur() }
-        }
-
-        fun cleanup() {
-            blurBitmap?.recycle()
-            blurBitmap = null
-        }
-    }
-
     // ═════════════════════════════════════════════════════════════════════
     // ═══ Layer 2: Content (tabs, indicator, badges — always sharp) ═════
     // ═════════════════════════════════════════════════════════════════════
@@ -477,7 +346,7 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                     outline.setEmpty()
                 }
             }
-            // CRITICAL: Must be above BlurBackgroundView which has elevation.
+            // CRITICAL: Must be above blurBackground which has elevation.
             // Use translationZ (not elevation) to avoid drawing a shadow.
             translationZ = elevationDp + 0.1f
         }
@@ -498,7 +367,22 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                 wrapper.isClickable = true
                 wrapper.isFocusable = true
 
-                // Vertical layout: icon + label
+                // Layer 1: white card background — LayoutParams set ONCE, never changed
+                // Visibility is toggled instead to avoid layout pass bugs
+                val cardView = View(context).apply {
+                    background = GradientDrawable().apply {
+                        setColor(Color.WHITE)
+                        cornerRadius = activeCardCornerRadius
+                    }
+                    visibility = if (isActive) View.VISIBLE else View.INVISIBLE
+                }
+                wrapper.addView(cardView, FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER
+                ).apply { setMargins(activeCardMargin, activeCardMargin, activeCardMargin, activeCardMargin) })
+
+                // Layer 2: icon + label column — always MATCH_PARENT, no margins
                 val column = LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
@@ -568,9 +452,9 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                     maxLines = 1
                 }
                 column.addView(labelView, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { gravity = Gravity.CENTER_HORIZONTAL })
+                ))
 
                 wrapper.addView(column, FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
@@ -579,7 +463,7 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                 ))
 
                 addView(wrapper)
-                tabHolders.add(TabViewHolder(wrapper, column, iconView, labelView))
+                tabHolders.add(TabViewHolder(wrapper, cardView, column, iconView, labelView))
             }
 
             // Init badge states (numeric badges and dot badges)
@@ -712,6 +596,9 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                 } else {
                     Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 }
+
+                // Toggle card visibility — LayoutParams never change, no layout pass needed
+                holder.cardView.visibility = if (isActive) View.VISIBLE else View.INVISIBLE
             }
         }
 
@@ -799,7 +686,6 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         // ── Drawing ─────────────────────────────────────────────────────
 
         override fun dispatchDraw(canvas: Canvas) {
-            drawIndicator(canvas)
             super.dispatchDraw(canvas)
             drawBadges(canvas)
         }
