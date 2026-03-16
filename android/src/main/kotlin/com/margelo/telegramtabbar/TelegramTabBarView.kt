@@ -85,10 +85,10 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
 
     private data class TabViewHolder(
         val wrapper: FrameLayout,
-        val cardView: View,          // White card bg — always MATCH_PARENT + margins, just toggled visible/invisible
-        val column: LinearLayout,
-        val iconView: View,          // Can be ImageView or SvgIconView
-        val labelView: TextView
+        val cardView: View,           // White card bg — always MATCH_PARENT + margins, just toggled visible/invisible
+        val column: LinearLayout?,    // null when no SVG data (RN overlay handles icons)
+        val iconView: View?,          // null when no SVG data
+        val labelView: TextView?      // null when no SVG data
     )
 
     private var tabs: List<TabItem> = emptyList()
@@ -366,9 +366,14 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     }
 
     fun setActiveIndex(index: Int) {
-        if (index == activeIndex && contentOverlay.indicatorAnimator == null) return
-        activeIndex = index.coerceIn(0, max(0, tabs.size - 1))
-        contentOverlay.animateIndicatorTo(activeIndex)
+        val newIndex = index.coerceIn(0, max(0, tabs.size - 1))
+        val changed = newIndex != activeIndex
+        activeIndex = newIndex
+        if (changed || contentOverlay.indicatorAnimator != null) {
+            contentOverlay.animateIndicatorTo(activeIndex)
+        }
+        // Always sync white card — guard was preventing re-sync after rebuildTabs()
+        // when activeIndex value didn't change (e.g. stays on same tab after auth).
         contentOverlay.updateTabAppearance()
     }
 
@@ -521,17 +526,59 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                     Gravity.CENTER
                 ).apply { setMargins(activeCardMargin, activeCardMargin, activeCardMargin, activeCardMargin) })
 
-                // Layer 2: icon + label column — always MATCH_PARENT, no margins
-                val column = LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER
+                // iconMap (sent once on mount) takes priority; fall back to
+                // svgPaths embedded in the tab item for backward compatibility.
+                val svgData = iconMap[tab.key]?.takeIf { it.isNotEmpty() }
+                    ?: tab.svgPaths?.takeIf { it.isNotEmpty() }
+
+                // Layer 2: icon + label column — only added when SVG data is available.
+                // When no SVG data, the RN overlay handles icon/label rendering; the
+                // native layer only provides the pill shape, white card, and touch wrappers.
+                val column: LinearLayout?
+                val iconView: View?
+                val labelView: TextView?
+
+                if (svgData != null) {
+                    val rawColor = if (isActive) activeColor else inactiveColor
+                    val iconColor = Color.rgb(Color.red(rawColor), Color.green(rawColor), Color.blue(rawColor))
+
+                    val col = LinearLayout(context).apply {
+                        orientation = LinearLayout.VERTICAL
+                        gravity = Gravity.CENTER
+                    }
+                    val iv = SvgIconView(context, svgData).apply { setColor(iconColor) }
+                    col.addView(iv, LinearLayout.LayoutParams(iconSizePx, iconSizePx).apply {
+                        gravity = Gravity.CENTER_HORIZONTAL
+                    })
+                    val lv = TextView(context).apply {
+                        text = tab.title
+                        textSize = 10f
+                        setTextColor(Color.rgb(Color.red(rawColor), Color.green(rawColor), Color.blue(rawColor)))
+                        typeface = if (isActive) Typeface.create("sans-serif-medium", Typeface.BOLD)
+                            else Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                        gravity = Gravity.CENTER
+                        setPadding(0, (1 * density).roundToInt(), 0, 0)
+                        maxLines = 1
+                    }
+                    col.addView(lv, LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ))
+                    wrapper.addView(col, FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        Gravity.CENTER
+                    ))
+                    column = col; iconView = iv; labelView = lv
+                } else {
+                    column = null; iconView = null; labelView = null
                 }
 
-                // Set listeners after column is created (bounce needs column reference)
+                // Bounce the column if native icons exist, otherwise just haptic + event.
                 wrapper.setOnClickListener {
                     it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP,
                         HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
-                    animateTabBounce(i, column)
+                    column?.let { col -> animateTabBounce(i, col) }
                     onTabPress?.invoke(tab.key)
                 }
                 wrapper.setOnLongClickListener {
@@ -540,71 +587,6 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                     onTabLongPress?.invoke(tab.key)
                     true
                 }
-
-                // Icon — SVG paths (from lucide) take priority, then drawable fallback
-                val rawColor = if (isActive) activeColor else inactiveColor
-                val iconColor = Color.rgb(Color.red(rawColor), Color.green(rawColor), Color.blue(rawColor))
-
-                // iconMap (sent once on mount) takes priority; fall back to
-                // svgPaths embedded in the tab item for backward compatibility.
-                val svgData = iconMap[tab.key]?.takeIf { it.isNotEmpty() }
-                    ?: tab.svgPaths?.takeIf { it.isNotEmpty() }
-
-                val iconView: View = if (svgData != null) {
-                    // Preferred: draw SVG paths from lucide icons — crisp stroke rendering
-                    SvgIconView(context, svgData).apply {
-                        setColor(iconColor)
-                    }
-                } else {
-                    // Legacy fallback: use Android drawable resource
-                    ImageView(context).apply {
-                        scaleType = ImageView.ScaleType.FIT_CENTER
-                        alpha = 1f
-                        val drawable = resolveIcon(tab.icon, tab.key)
-                        if (drawable != null) {
-                            val mutated = drawable.mutate()
-                            mutated.setTintList(null)
-                            setImageDrawable(mutated)
-                            imageTintList = android.content.res.ColorStateList.valueOf(iconColor)
-                        } else {
-                            visibility = View.GONE
-                        }
-                    }
-                }
-
-                column.addView(iconView, LinearLayout.LayoutParams(iconSizePx, iconSizePx).apply {
-                    gravity = Gravity.CENTER_HORIZONTAL
-                })
-
-                // Log icon creation for debugging
-                if (iconView is SvgIconView) {
-                    android.util.Log.d("TelegramTabBar", "Tab[${tab.key}] → SvgIconView with ${tab.svgPaths?.size ?: 0} elements, color=${String.format("#%08X", iconColor)}")
-                } else {
-                    android.util.Log.d("TelegramTabBar", "Tab[${tab.key}] → ImageView (drawable fallback)")
-                }
-
-                // Label — force full alpha on text color
-                val labelColor = if (isActive) activeColor else inactiveColor
-                val labelView = TextView(context).apply {
-                    text = tab.title
-                    textSize = 10f // sp
-                    setTextColor(Color.rgb(Color.red(labelColor), Color.green(labelColor), Color.blue(labelColor)))
-                    typeface = if (isActive) Typeface.create("sans-serif-medium", Typeface.BOLD)
-                        else Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                    gravity = Gravity.CENTER
-                    setPadding(0, (1 * density).roundToInt(), 0, 0)
-                    maxLines = 1
-                }
-                column.addView(labelView, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ))
-
-                wrapper.addView(column, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    Gravity.CENTER
-                ))
 
                 addView(wrapper)
                 tabHolders.add(TabViewHolder(wrapper, cardView, column, iconView, labelView))
@@ -698,51 +680,45 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
             for (i in tabHolders.indices) {
                 val holder = tabHolders[i]
                 val isActive = i == activeIndex
+
+                // Toggle card visibility — always done, regardless of icon mode
+                holder.cardView.visibility = if (isActive) View.VISIBLE else View.INVISIBLE
+
+                // Icon/label color animation — only when native icons are present
+                val iv = holder.iconView ?: continue
+                val lv = holder.labelView ?: continue
+
                 val rawColor = if (isActive) activeColor else inactiveColor
                 val color = Color.rgb(Color.red(rawColor), Color.green(rawColor), Color.blue(rawColor))
 
-                // Phase 3: Cancel any in-progress color animation for this tab
                 tabColorAnimators[i]?.cancel()
 
-                // Get current color depending on icon type
-                val currentColor = when (val iv = holder.iconView) {
+                val currentColor = when (iv) {
                     is SvgIconView -> iv.getColor()
                     is ImageView -> iv.imageTintList?.defaultColor ?: inactiveColor
                     else -> inactiveColor
                 }
 
-                // Animate color transition with proper lifecycle (Phase 3 + 4)
                 val animator = ValueAnimator.ofArgb(currentColor, color).apply {
                     duration = 200
                     interpolator = telegramInterpolator
                     addUpdateListener { anim ->
                         val c = anim.animatedValue as Int
-                        when (val iv = holder.iconView) {
-                            is SvgIconView -> iv.setColor(c)  // Uses PorterDuff internally
-                            is ImageView -> {
-                                // Phase 3: PorterDuff for ImageView too
-                                iv.colorFilter = getColorFilter(c)
-                            }
+                        when (iv) {
+                            is SvgIconView -> iv.setColor(c)
+                            is ImageView -> iv.colorFilter = getColorFilter(c)
                         }
-                        holder.labelView.setTextColor(c)
+                        lv.setTextColor(c)
                     }
                     addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(a: Animator) {
-                            tabColorAnimators.remove(i)
-                        }
+                        override fun onAnimationEnd(a: Animator) { tabColorAnimators.remove(i) }
                     })
                     start()
                 }
                 tabColorAnimators[i] = animator
 
-                holder.labelView.typeface = if (isActive) {
-                    Typeface.create("sans-serif-medium", Typeface.BOLD)
-                } else {
-                    Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                }
-
-                // Toggle card visibility — LayoutParams never change, no layout pass needed
-                holder.cardView.visibility = if (isActive) View.VISIBLE else View.INVISIBLE
+                lv.typeface = if (isActive) Typeface.create("sans-serif-medium", Typeface.BOLD)
+                    else Typeface.create("sans-serif-medium", Typeface.NORMAL)
             }
         }
 
