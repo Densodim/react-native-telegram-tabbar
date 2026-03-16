@@ -19,6 +19,12 @@
 export const TAB_BAR_HEIGHT = 56;
 
 /**
+ * Горизонтальный отступ плавающей панели от краёв экрана в dp.
+ * Horizontal margin of the floating pill from screen edges in dp.
+ */
+export const FLOATING_MARGIN_H = 16;
+
+/**
  * Отступ снизу от края экрана до нижнего края панели в dp.
  * Bottom margin from the screen edge to the tab bar bottom in dp.
  */

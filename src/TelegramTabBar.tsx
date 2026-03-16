@@ -1,62 +1,58 @@
 /**
  * @file TelegramTabBar.tsx
  * @description Telegram-style floating tab bar for React Navigation / Expo Router.
- *              Works on iOS and Android — no Expo dependency.
+ *
+ * Icons and labels are driven by `tabBarIcon` / `tabBarLabel` from screen options —
+ * the same API as Expo Router's built-in tab bar. The native layer handles only the
+ * pill shape, blur, visibility animation, and badge rendering.
  */
 
 import React from 'react'
-import { Platform, View } from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NativeTelegramTabBarView } from './NativeTelegramTabBar'
 import {
   DEFAULT_THEME,
   EXTRA_PADDING,
   FLOATING_MARGIN_BOTTOM,
+  FLOATING_MARGIN_H,
   TAB_BAR_HEIGHT,
 } from './tabBar/constants'
 import { useBadges } from './tabBar/useBadges'
-import { useTabs } from './tabBar/useTabs'
 import { useTabHandlers } from './tabBar/useTabHandlers'
 import { useVisibleRoutes } from './tabBar/useVisibleRoutes'
 import type { TabBadgeItem } from './NativeTelegramTabBar'
-
-export { iconNodesToSvg } from './tabBar/iconNodesToSvg'
-export type {
-  IconNode,
-  TelegramTabBarCustomProps,
-  TelegramTabBarProps,
-} from './tabBar/types'
-
 import type { TelegramTabBarProps } from './tabBar/types'
+
+export type { TelegramTabBarCustomProps, TelegramTabBarProps } from './tabBar/types'
 
 export function TelegramTabBar({
   state,
   descriptors,
   navigation,
   theme: customTheme,
-  icons,
-  iconNodes,
   isVisible,
 }: TelegramTabBarProps) {
   const { bottom } = useSafeAreaInsets()
+  const theme = customTheme ?? DEFAULT_THEME
 
   const visibleRoutes = useVisibleRoutes(state.routes, descriptors)
-  const tabs = useTabs(visibleRoutes, descriptors, icons, iconNodes)
 
-  // iconMap is computed once from the static iconNodes dictionary and sent to
-  // native as a separate prop. Native caches it independently of the tabs array,
-  // so icons survive tab list rebuilds (auth changes, role switches).
-  const iconMap = React.useMemo(() => {
-    if (!iconNodes) return undefined
-    const result: Record<string, import('./types/svg').SvgElement[]> = {}
-    for (const [routeName, nodes] of Object.entries(iconNodes)) {
-      result[routeName] = iconNodesToSvg(nodes)
-    }
-    return result
-  }, [iconNodes])
-  const activeIndex = visibleRoutes.findIndex(
+  // Native layer receives only route keys — no icon/label data needed.
+  // Icon + label are rendered by the RN overlay below using tabBarIcon from
+  // screen options, identical to how Expo Router's own tab bar works.
+  const nativeTabs = React.useMemo(
+    () => visibleRoutes.map(r => ({ key: r.name, title: '' })),
+    [visibleRoutes],
+  )
+
+  // Clamp to 0: findIndex returns -1 when state.index points to a hidden route
+  // (e.g., auth tab just after login). Prevents native from receiving -1.
+  const rawActiveIndex = visibleRoutes.findIndex(
     r => r.key === state.routes[state.index].key,
   )
+  const activeIndex = rawActiveIndex >= 0 ? rawActiveIndex : 0
+
   const { badges, dotBadges } = useBadges(visibleRoutes, descriptors)
   const activeRouteKey = state.routes[state.index].key
   const { handleTabPress, handleTabLongPress } = useTabHandlers(
@@ -65,49 +61,103 @@ export function TelegramTabBar({
     navigation,
   )
 
-  const theme = customTheme ?? DEFAULT_THEME
-
-  // Convert badges + dotBadges -> unified tabBadges array
   const tabBadges: TabBadgeItem[] = React.useMemo(() => {
     const items: TabBadgeItem[] = []
-    Object.entries(badges).forEach(([key, count]) => {
-      items.push({ key, count, isDot: false })
-    })
+    Object.entries(badges).forEach(([key, count]) =>
+      items.push({ key, count, isDot: false }),
+    )
     dotBadges.forEach(key => {
       if (!badges[key]) items.push({ key, count: 0, isDot: true })
     })
     return items
   }, [badges, dotBadges])
 
-  const totalHeight =
-    TAB_BAR_HEIGHT + FLOATING_MARGIN_BOTTOM + bottom + EXTRA_PADDING
+  const totalHeight = TAB_BAR_HEIGHT + FLOATING_MARGIN_BOTTOM + bottom + EXTRA_PADDING
 
-  if (Platform.OS === 'android' || Platform.OS === 'ios') {
-    return (
+  if (Platform.OS !== 'android' && Platform.OS !== 'ios') return null
+
+  return (
+    <View style={styles.container}>
+      {/* Native layer: pill shape, blur, visibility animation, badges */}
+      <NativeTelegramTabBarView
+        tabs={nativeTabs}
+        activeIndex={activeIndex}
+        theme={theme}
+        tabBadges={tabBadges}
+        bottomInset={bottom}
+        isVisible={isVisible ?? true}
+        onTabPress={handleTabPress}
+        onTabLongPress={handleTabLongPress}
+        style={{ height: totalHeight, width: '100%' }}
+      />
+
+      {/* RN overlay: icons + labels only — purely visual, no touch handling.
+          pointerEvents='none' lets touches fall through to the native view below,
+          where ContentOverlayView wrappers invoke onTabPress/onTabLongPress. */}
       <View
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          pointerEvents: 'box-none',
-        }}
+        pointerEvents='none'
+        style={[
+          styles.overlay,
+          { bottom: FLOATING_MARGIN_BOTTOM + bottom, height: TAB_BAR_HEIGHT },
+        ]}
       >
-        <NativeTelegramTabBarView
-          tabs={tabs}
-          activeIndex={activeIndex}
-          theme={theme}
-          tabBadges={tabBadges}
-          bottomInset={bottom}
-          isVisible={isVisible ?? true}
-          iconMap={iconMap}
-          onTabPress={handleTabPress}
-          onTabLongPress={handleTabLongPress}
-          style={{ height: totalHeight, width: '100%' }}
-        />
-      </View>
-    )
-  }
+        {visibleRoutes.map((route, index) => {
+          const { options } = descriptors[route.key]
+          const isActive = index === activeIndex
+          const color = isActive ? theme.activeColor : theme.inactiveColor
 
-  return null
+          const icon = options.tabBarIcon?.({ focused: isActive, color, size: 22 })
+          const labelStr =
+            typeof options.tabBarLabel === 'string'
+              ? options.tabBarLabel
+              : (options.title ?? route.name)
+
+          return (
+            <View key={route.key} style={styles.tabCell}>
+              {icon}
+              {options.tabBarShowLabel !== false && (
+                <Text
+                  style={[
+                    styles.label,
+                    {
+                      color,
+                      fontWeight: isActive ? '600' : '400',
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {labelStr}
+                </Text>
+              )}
+            </View>
+          )
+        })}
+      </View>
+    </View>
+  )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    pointerEvents: 'box-none',
+  } as const,
+  overlay: {
+    position: 'absolute',
+    left: FLOATING_MARGIN_H,
+    right: FLOATING_MARGIN_H,
+    flexDirection: 'row',
+  },
+  tabCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  label: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+})

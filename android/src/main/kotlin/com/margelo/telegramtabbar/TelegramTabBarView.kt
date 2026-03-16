@@ -338,9 +338,15 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         if (tabs.map { it.key } == newTabs.map { it.key } && tabs.size == newTabs.size) return
         tabs = newTabs
         contentOverlay.rebuildTabs()
-        // After RN prop batch completes, force measure+draw with new tab count
+        // After the full RN prop batch completes, re-sync card visibility to the
+        // FINAL activeIndex value. This post{} runs after all @ReactProp calls in
+        // this batch (tabs, activeIndex, theme) have been applied, so activeIndex
+        // is guaranteed to be up-to-date. Fixes the white-card disappearing after
+        // auth changes the tab count while activeIndex stays the same value
+        // (guard in setActiveIndex skips updateTabAppearance in that case).
         contentOverlay.post {
             contentOverlay.requestLayout()
+            contentOverlay.updateTabAppearance()
             contentOverlay.invalidate()
         }
     }
