@@ -36,7 +36,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.PathParser
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.qmdeve.blurview.widget.BlurView
+import android.view.ViewTreeObserver
+import com.qmdeve.blurview.widget.BlurViewGroup
+import com.qmdeve.blurview.base.BaseBlurViewGroup
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -142,15 +144,26 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     }
 
     // ── Layers ──────────────────────────────────────────────────────────
-    // Layer 0: pill blur background (rounded capsule)
-    private val blurBackground = BlurView(context, null).also { v ->
+    // Fallback drawable — flat color shown until blur activates (or if blur root not found).
+    private val pillDrawable = GradientDrawable().apply {
+        setColor(Color.argb(0xA3, 0, 0, 0))   // #000000 @ 64 % — Figma spec fallback
+        cornerRadius = this@TelegramTabBarView.cornerRadius
+    }
+
+    // Layer 0: BlurViewGroup — captures the sibling screens container (not the decor view)
+    // to produce a true frosted-glass effect without the full-screen overlay artifact.
+    private val blurBackground = BlurViewGroup(context, null).also { v ->
+        v.background = pillDrawable     // Flat fallback until blur root is found
         v.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
                 outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
             }
         }
         v.clipToOutline = true
+        v.clipChildren = true
         v.elevation = elevationDp
+        v.blurRounds = 4
+        v.setDownsampleFactor(4.0f)
     }
 
     private val contentOverlay = ContentOverlayView(context)
@@ -195,20 +208,108 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         ViewCompat.requestApplyInsets(this)
-        setupBlur()
-    }
-
-    private fun setupBlur() {
-        blurBackground.setBlurRadius(20f)
-        blurBackground.setCornerRadius(cornerRadius)
-        blurBackground.setOverlayColor(
-            Color.argb(0xA3, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor))
-        )
+        // post{} ensures BlurViewGroup.onAttachedToWindow() has already run
+        // (Android dispatches parent first, then children, so children attach during super call above;
+        //  post{} queues after the current dispatch so fields are initialised).
+        post { setupBlur() }
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        blurBackground.release()
+        isBlurInitialized = false
+    }
+
+    private var isBlurInitialized = false
+
+    /** Flat pill color — Figma spec. Used as fallback when blur root is unavailable. */
+    private fun pillColor(bgColor: Int): Int {
+        val luminance = (0.2126 * Color.red(bgColor) + 0.7152 * Color.green(bgColor) +
+                0.0722 * Color.blue(bgColor)) / 255.0
+        return if (luminance < 0.4) Color.argb(0xA3, 48, 48, 56)
+        else Color.argb(0xA3, 0, 0, 0)
+    }
+
+    /** Ultra-thin glass overlay — sits on top of the blur, like iOS systemUltraThinMaterialDark. */
+    private fun blurOverlayColor(bgColor: Int): Int {
+        val luminance = (0.2126 * Color.red(bgColor) + 0.7152 * Color.green(bgColor) +
+                0.0722 * Color.blue(bgColor)) / 255.0
+        return if (luminance < 0.4) Color.argb(0x26, 48, 48, 56)  // ~15 % dark
+        else Color.argb(0x26, 0, 0, 0)                              // ~15 % light
+    }
+
+    private fun setupBlur() {
+        if (isBlurInitialized) return
+        swapBlurRootToSibling()
+        blurBackground.setBlurRadius(25f)
+        blurBackground.setCornerRadius(cornerRadius)
+        blurBackground.setOverlayColor(blurOverlayColor(bgColor))
+        isBlurInitialized = true
+    }
+
+    /**
+     * Redirects QmBlurView's blur capture root from the activity decor view to
+     * the SIBLING screens container (the ViewGroup that holds the navigation screens).
+     *
+     * In React Navigation bottom tabs the hierarchy is:
+     *   BottomTabNavigator root
+     *     ├── ScreensContainer   ← this is what we want to blur
+     *     └── TelegramTabBarView ← us
+     *
+     * Using the sibling (not the decor view) eliminates the full-screen overlay artifact
+     * because the BlurView only captures the content it floats over.
+     */
+    private fun swapBlurRootToSibling() {
+        val sibling = findScreensContainer() ?: return
+        // Blur root found — clear the flat-color fallback
+        blurBackground.background = null
+
+        try {
+            val blurViewGroupClass = BlurViewGroup::class.java
+            val baseField = blurViewGroupClass.getDeclaredField("mBaseBlurViewGroup")
+            baseField.isAccessible = true
+            val base = baseField.get(blurBackground) ?: return
+
+            val baseClass = BaseBlurViewGroup::class.java
+
+            val decorViewField = baseClass.getDeclaredField("mDecorView")
+            decorViewField.isAccessible = true
+            val oldRoot = decorViewField.get(base) as? View
+
+            val preDrawListenerField = baseClass.getDeclaredField("preDrawListener")
+            preDrawListenerField.isAccessible = true
+            val listener = preDrawListenerField.get(base) as? ViewTreeObserver.OnPreDrawListener
+
+            if (listener != null && oldRoot != null) {
+                try { oldRoot.viewTreeObserver.removeOnPreDrawListener(listener) } catch (_: Exception) {}
+                decorViewField.set(base, sibling)
+                sibling.viewTreeObserver.addOnPreDrawListener(listener)
+
+                baseClass.getDeclaredField("mDifferentRoot").also {
+                    it.isAccessible = true; it.setBoolean(base, true)
+                }
+                baseClass.getDeclaredField("mForceRedraw").also {
+                    it.isAccessible = true; it.setBoolean(base, true)
+                }
+            }
+        } catch (_: Exception) {
+            // Reflection failed — restore flat-color fallback
+            blurBackground.background = pillDrawable
+        }
+    }
+
+    private fun findScreensContainer(): ViewGroup? {
+        // The screens container is the first sibling child of the same parent.
+        // In React Navigation bottom tabs both the screens stack and the tab bar
+        // share the same parent ViewGroup.
+        val parent = this.parent as? ViewGroup ?: return null
+        for (i in 0 until parent.childCount) {
+            val child = parent.getChildAt(i)
+            if (child !== this && child is ViewGroup) {
+                android.util.Log.d("TelegramTabBar", "blur root → ${child.javaClass.simpleName}")
+                return child
+            }
+        }
+        return null
     }
 
     private fun updateMargins() {
@@ -225,6 +326,11 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         if (tabs == newTabs) return
         tabs = newTabs
         contentOverlay.rebuildTabs()
+        // After RN prop batch completes, force measure+draw with new tab count
+        contentOverlay.post {
+            contentOverlay.requestLayout()
+            contentOverlay.invalidate()
+        }
     }
 
     fun setActiveIndex(index: Int) {
@@ -254,11 +360,12 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     }
 
     fun setThemeColors(bg: Int, active: Int, inactive: Int, indicator: Int) {
-        android.util.Log.d("TelegramTabBar", "setThemeColors active=${String.format("#%06X", active and 0xFFFFFF)} inactive=${String.format("#%06X", inactive and 0xFFFFFF)} bg=${String.format("#%06X", bg and 0xFFFFFF)}")
         bgColor = bg; activeColor = active; inactiveColor = inactive; indicatorColor = indicator
-        blurBackground.setOverlayColor(
-            Color.argb(0xA3, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor))
-        )
+        if (isBlurInitialized) {
+            blurBackground.setOverlayColor(blurOverlayColor(bgColor))
+        } else {
+            pillDrawable.setColor(pillColor(bgColor))
+        }
         contentOverlay.updateTabAppearance()
         contentOverlay.invalidate()
     }
