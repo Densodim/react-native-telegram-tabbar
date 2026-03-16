@@ -70,6 +70,19 @@ class TelegramTabBarViewManager(
     view.setTabs(tabList)
   }
 
+  @ReactProp(name = "iconMap")
+  fun setIconMap(view: TelegramTabBarView, map: ReadableMap?) {
+    if (map == null) return
+    val iconMap = mutableMapOf<String, List<TelegramTabBarView.SvgElement>>()
+    val iterator = map.keySetIterator()
+    while (iterator.hasNextKey()) {
+      val key = iterator.nextKey()
+      val arr = if (map.hasKey(key)) map.getArray(key) else null
+      iconMap[key] = parseSvgElements(arr)
+    }
+    view.setIconMap(iconMap)
+  }
+
   @ReactProp(name = "activeIndex", defaultInt = 0)
   fun setActiveIndex(view: TelegramTabBarView, index: Int) {
     view.setActiveIndex(index)

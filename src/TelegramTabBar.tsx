@@ -42,6 +42,18 @@ export function TelegramTabBar({
 
   const visibleRoutes = useVisibleRoutes(state.routes, descriptors)
   const tabs = useTabs(visibleRoutes, descriptors, icons, iconNodes)
+
+  // iconMap is computed once from the static iconNodes dictionary and sent to
+  // native as a separate prop. Native caches it independently of the tabs array,
+  // so icons survive tab list rebuilds (auth changes, role switches).
+  const iconMap = React.useMemo(() => {
+    if (!iconNodes) return undefined
+    const result: Record<string, import('./types/svg').SvgElement[]> = {}
+    for (const [routeName, nodes] of Object.entries(iconNodes)) {
+      result[routeName] = iconNodesToSvg(nodes)
+    }
+    return result
+  }, [iconNodes])
   const activeIndex = visibleRoutes.findIndex(
     r => r.key === state.routes[state.index].key,
   )
@@ -88,6 +100,7 @@ export function TelegramTabBar({
           tabBadges={tabBadges}
           bottomInset={bottom}
           isVisible={isVisible ?? true}
+          iconMap={iconMap}
           onTabPress={handleTabPress}
           onTabLongPress={handleTabLongPress}
           style={{ height: totalHeight, width: '100%' }}

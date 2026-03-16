@@ -8,6 +8,7 @@
 import { requireNativeComponent } from 'react-native'
 import type { ViewProps } from 'react-native'
 import type { TabItem, TabBarTheme } from './types/tab'
+import type { SvgElement } from './types/svg'
 import type { TabLongPressEvent, TabPressEvent } from './types/events'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,6 +28,12 @@ export interface NativeTelegramTabBarProps extends ViewProps {
   tabBadges?: TabBadgeItem[]
   bottomInset?: number
   isVisible?: boolean
+  /**
+   * Icon map: route name → SVG elements.
+   * Sent once on mount and cached natively — icons survive tab list rebuilds
+   * (auth state changes, role switches) without re-transmission.
+   */
+  iconMap?: Record<string, SvgElement[]>
   onTabPress?: (event: TabPressEvent) => void
   onTabLongPress?: (event: TabLongPressEvent) => void
 }

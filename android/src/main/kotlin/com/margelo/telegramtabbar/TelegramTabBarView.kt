@@ -92,6 +92,12 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     )
 
     private var tabs: List<TabItem> = emptyList()
+    /**
+     * Icon map: route name → SVG elements. Sent once from JS on mount (static
+     * Lucide data) and cached here. rebuildTabs() consults this map first so
+     * icons survive tab list rebuilds caused by auth state changes / role switches.
+     */
+    private var iconMap: Map<String, List<SvgElement>> = emptyMap()
     private var activeIndex: Int = 0
     private var badges: Map<String, Int> = emptyMap()
     private var dotBadges: Set<String> = emptySet()
@@ -327,13 +333,29 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     // ── Public API ──────────────────────────────────────────────────────
 
     fun setTabs(newTabs: List<TabItem>) {
-        if (tabs == newTabs) return
+        // Compare only route keys — SVG data is now in iconMap and must not
+        // trigger an unnecessary rebuild when it differs from the cached version.
+        if (tabs.map { it.key } == newTabs.map { it.key } && tabs.size == newTabs.size) return
         tabs = newTabs
         contentOverlay.rebuildTabs()
         // After RN prop batch completes, force measure+draw with new tab count
         contentOverlay.post {
             contentOverlay.requestLayout()
             contentOverlay.invalidate()
+        }
+    }
+
+    fun setIconMap(newMap: Map<String, List<SvgElement>>) {
+        if (iconMap == newMap) return
+        iconMap = newMap
+        // Rebuild so icons appear even when setTabs was applied before setIconMap
+        // (React Native does not guarantee prop delivery order).
+        if (tabs.isNotEmpty()) {
+            contentOverlay.rebuildTabs()
+            contentOverlay.post {
+                contentOverlay.requestLayout()
+                contentOverlay.invalidate()
+            }
         }
     }
 
@@ -517,9 +539,14 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                 val rawColor = if (isActive) activeColor else inactiveColor
                 val iconColor = Color.rgb(Color.red(rawColor), Color.green(rawColor), Color.blue(rawColor))
 
-                val iconView: View = if (!tab.svgPaths.isNullOrEmpty()) {
+                // iconMap (sent once on mount) takes priority; fall back to
+                // svgPaths embedded in the tab item for backward compatibility.
+                val svgData = iconMap[tab.key]?.takeIf { it.isNotEmpty() }
+                    ?: tab.svgPaths?.takeIf { it.isNotEmpty() }
+
+                val iconView: View = if (svgData != null) {
                     // Preferred: draw SVG paths from lucide icons — crisp stroke rendering
-                    SvgIconView(context, tab.svgPaths).apply {
+                    SvgIconView(context, svgData).apply {
                         setColor(iconColor)
                     }
                 } else {
