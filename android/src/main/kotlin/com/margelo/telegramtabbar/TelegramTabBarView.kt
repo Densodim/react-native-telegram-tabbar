@@ -229,12 +229,16 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         else Color.argb(0xA3, 0, 0, 0)
     }
 
-    /** Ultra-thin glass overlay — sits on top of the blur, like iOS systemUltraThinMaterialDark. */
+    /**
+     * Overlay color rendered on top of the blur — matches Figma spec: #000000 @ 64%.
+     * Light theme: black 64% → dark frosted pill (matches mockup).
+     * Dark  theme: charcoal 64% → pill stays distinguishable on dark background.
+     */
     private fun blurOverlayColor(bgColor: Int): Int {
         val luminance = (0.2126 * Color.red(bgColor) + 0.7152 * Color.green(bgColor) +
                 0.0722 * Color.blue(bgColor)) / 255.0
-        return if (luminance < 0.4) Color.argb(0x26, 48, 48, 56)  // ~15 % dark
-        else Color.argb(0x26, 0, 0, 0)                              // ~15 % light
+        return if (luminance < 0.4) Color.argb(0xA3, 48, 48, 56)  // dark theme  — charcoal 64 %
+        else Color.argb(0xA3, 0, 0, 0)                              // light theme — black   64 % (Figma)
     }
 
     private fun setupBlur() {
