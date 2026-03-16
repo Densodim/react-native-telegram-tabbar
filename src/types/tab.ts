@@ -46,6 +46,12 @@ export interface TabItem {
    * Takes priority over the icon field.
    */
   svgPaths?: SvgElement[];
+
+  /**
+   * Lucide icon name (camelCase). E.g. "house", "search", "messageCircle".
+   * Used by the native Android layer (compose-icons/lucide) to render the icon.
+   */
+  iconName?: string;
 }
 
 /**

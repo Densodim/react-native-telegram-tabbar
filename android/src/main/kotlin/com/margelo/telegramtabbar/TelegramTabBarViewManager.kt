@@ -63,9 +63,10 @@ class TelegramTabBarViewManager(
       val key = tab.getString("key") ?: continue
       val title = tab.getString("title") ?: ""
       val icon = if (tab.hasKey("icon")) tab.getString("icon") else null
+      val iconName = if (tab.hasKey("iconName")) tab.getString("iconName") else null
       val svgPathsArr = if (tab.hasKey("svgPaths")) tab.getArray("svgPaths") else null
       val svgElements = parseSvgElements(svgPathsArr)
-      tabList.add(TelegramTabBarView.TabItem(key = key, title = title, icon = icon, svgPaths = svgElements))
+      tabList.add(TelegramTabBarView.TabItem(key = key, title = title, icon = icon, svgPaths = svgElements, iconName = iconName))
     }
     view.setTabs(tabList)
   }

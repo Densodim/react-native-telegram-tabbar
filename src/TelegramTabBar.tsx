@@ -2,20 +2,18 @@
  * @file TelegramTabBar.tsx
  * @description Telegram-style floating tab bar for React Navigation / Expo Router.
  *
- * Icons and labels are driven by `tabBarIcon` / `tabBarLabel` from screen options —
- * the same API as Expo Router's built-in tab bar. The native layer handles only the
- * pill shape, blur, visibility animation, and badge rendering.
+ * Icons and labels are driven by custom `tabBarIconName` / `tabBarLabel` screen
+ * options. The native Compose layer renders everything — no RN overlay needed.
  */
 
 import React from 'react'
-import { Platform, StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { NativeTelegramTabBarView } from './NativeTelegramTabBar'
 import {
   DEFAULT_THEME,
   EXTRA_PADDING,
   FLOATING_MARGIN_BOTTOM,
-  FLOATING_MARGIN_H,
   TAB_BAR_HEIGHT,
 } from './tabBar/constants'
 import { useBadges } from './tabBar/useBadges'
@@ -38,16 +36,23 @@ export function TelegramTabBar({
 
   const visibleRoutes = useVisibleRoutes(state.routes, descriptors)
 
-  // Native layer receives only route keys — no icon/label data needed.
-  // Icon + label are rendered by the RN overlay below using tabBarIcon from
-  // screen options, identical to how Expo Router's own tab bar works.
+  // Each tab passes iconName + title to the native Compose layer.
   const nativeTabs = React.useMemo(
-    () => visibleRoutes.map(r => ({ key: r.name, title: '' })),
-    [visibleRoutes],
+    () =>
+      visibleRoutes.map(r => {
+        const opts = descriptors[r.key].options as Record<string, unknown>
+        const iconName = (opts.tabBarIconName as string | undefined) ?? undefined
+        const title =
+          typeof opts.tabBarLabel === 'string'
+            ? opts.tabBarLabel
+            : typeof opts.title === 'string'
+              ? opts.title
+              : r.name
+        return { key: r.name, title, iconName }
+      }),
+    [visibleRoutes, descriptors],
   )
 
-  // Clamp to 0: findIndex returns -1 when state.index points to a hidden route
-  // (e.g., auth tab just after login). Prevents native from receiving -1.
   const rawActiveIndex = visibleRoutes.findIndex(
     r => r.key === state.routes[state.index].key,
   )
@@ -78,7 +83,7 @@ export function TelegramTabBar({
 
   return (
     <View style={styles.container}>
-      {/* Native layer: pill shape, blur, visibility animation, badges */}
+      {/* Native layer renders pill + blur + icons + labels + white card + badges */}
       <NativeTelegramTabBarView
         tabs={nativeTabs}
         activeIndex={activeIndex}
@@ -90,49 +95,6 @@ export function TelegramTabBar({
         onTabLongPress={handleTabLongPress}
         style={{ height: totalHeight, width: '100%' }}
       />
-
-      {/* RN overlay: icons + labels only — purely visual, no touch handling.
-          pointerEvents='none' lets touches fall through to the native view below,
-          where ContentOverlayView wrappers invoke onTabPress/onTabLongPress. */}
-      <View
-        pointerEvents='none'
-        style={[
-          styles.overlay,
-          { bottom: FLOATING_MARGIN_BOTTOM + bottom, height: TAB_BAR_HEIGHT },
-        ]}
-      >
-        {visibleRoutes.map((route, index) => {
-          const { options } = descriptors[route.key]
-          const isActive = index === activeIndex
-          const color = isActive ? theme.activeColor : theme.inactiveColor
-
-          const icon = options.tabBarIcon?.({ focused: isActive, color, size: 22 })
-          const labelStr =
-            typeof options.tabBarLabel === 'string'
-              ? options.tabBarLabel
-              : (options.title ?? route.name)
-
-          return (
-            <View key={route.key} style={styles.tabCell}>
-              {icon}
-              {options.tabBarShowLabel !== false && (
-                <Text
-                  style={[
-                    styles.label,
-                    {
-                      color,
-                      fontWeight: isActive ? '600' : '400',
-                    },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {labelStr}
-                </Text>
-              )}
-            </View>
-          )
-        })}
-      </View>
     </View>
   )
 }
@@ -145,19 +107,4 @@ const styles = StyleSheet.create({
     right: 0,
     pointerEvents: 'box-none',
   } as const,
-  overlay: {
-    position: 'absolute',
-    left: FLOATING_MARGIN_H,
-    right: FLOATING_MARGIN_H,
-    flexDirection: 'row',
-  },
-  tabCell: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    fontSize: 10,
-    marginTop: 2,
-  },
 })

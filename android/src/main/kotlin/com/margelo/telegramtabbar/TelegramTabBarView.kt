@@ -2,61 +2,96 @@ package com.margelo.telegramtabbar
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
-import android.animation.AnimatorSet
-import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
+import android.graphics.GradientDrawable
 import android.graphics.Outline
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
-import android.graphics.RectF
-import android.graphics.Typeface
-import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
-import android.graphics.Rect
-import android.text.TextPaint
-import android.util.TypedValue
 import android.view.Gravity
-import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
-import android.view.animation.OvershootInterpolator
+import android.view.ViewTreeObserver
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.core.content.ContextCompat
-import androidx.core.graphics.PathParser
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import android.view.ViewTreeObserver
-import com.qmdeve.blurview.widget.BlurViewGroup
+import br.com.devsrsouza.compose.icons.Lucide
+import br.com.devsrsouza.compose.icons.lucide.Bell
+import br.com.devsrsouza.compose.icons.lucide.Bookmark
+import br.com.devsrsouza.compose.icons.lucide.Calendar
+import br.com.devsrsouza.compose.icons.lucide.Camera
+import br.com.devsrsouza.compose.icons.lucide.Heart
+import br.com.devsrsouza.compose.icons.lucide.House
+import br.com.devsrsouza.compose.icons.lucide.Image
+import br.com.devsrsouza.compose.icons.lucide.LogIn
+import br.com.devsrsouza.compose.icons.lucide.Mail
+import br.com.devsrsouza.compose.icons.lucide.Map
+import br.com.devsrsouza.compose.icons.lucide.MapPin
+import br.com.devsrsouza.compose.icons.lucide.Menu
+import br.com.devsrsouza.compose.icons.lucide.MessageCircle
+import br.com.devsrsouza.compose.icons.lucide.Phone
+import br.com.devsrsouza.compose.icons.lucide.PlusCircle
+import br.com.devsrsouza.compose.icons.lucide.Search
+import br.com.devsrsouza.compose.icons.lucide.Settings
+import br.com.devsrsouza.compose.icons.lucide.Star
+import br.com.devsrsouza.compose.icons.lucide.User
 import com.qmdeve.blurview.base.BaseBlurViewGroup
+import com.qmdeve.blurview.widget.BlurViewGroup
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
  * Native floating TabBar — Telegram-style.
  *
  * Architecture: 2-layer approach for glass effect with sharp content:
- *   Layer 1: BlurBackground (semi-transparent fill for glass effect + elevation shadow)
- *   Layer 2: ContentOverlay  (icons, labels, indicator, badges — always 100% sharp)
+ *   Layer 0: BlurBackground (QmBlurView — frosted-glass pill with elevation shadow)
+ *   Layer 1: ComposeView   (icons, labels, indicator, badges — crisp Compose rendering)
  *
- * Icons can be:
- *   1. SVG path data from lucide icons (preferred — crisp stroke-based rendering)
- *   2. Android drawable resources by name (legacy fallback)
+ * Icons are rendered natively via compose-icons/lucide (ImageVector).
+ * Touch is handled by Modifier.combinedClickable — no native touch conflicts.
  */
 class TelegramTabBarView(context: Context) : FrameLayout(context) {
 
-    /** SVG element descriptor — matches JS SvgElement interface */
+    /** SVG element descriptor — kept for backward-compatible bridge serialisation. */
     data class SvgElement(
         val type: String,
         val d: String? = null,
@@ -80,27 +115,14 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         val key: String,
         val title: String,
         val icon: String? = null,
-        val svgPaths: List<SvgElement>? = null
+        val svgPaths: List<SvgElement>? = null,
+        /** Lucide icon name (camelCase). E.g. "house", "search", "messageCircle". */
+        val iconName: String? = null
     )
 
-    private data class TabViewHolder(
-        val wrapper: FrameLayout,
-        val cardView: View,           // White card bg — always MATCH_PARENT + margins, just toggled visible/invisible
-        val column: LinearLayout?,    // null when no SVG data (RN overlay handles icons)
-        val iconView: View?,          // null when no SVG data
-        val labelView: TextView?      // null when no SVG data
-    )
-
+    // ── Internal state ───────────────────────────────────────────────────
     private var tabs: List<TabItem> = emptyList()
-    /**
-     * Icon map: route name → SVG elements. Sent once from JS on mount (static
-     * Lucide data) and cached here. rebuildTabs() consults this map first so
-     * icons survive tab list rebuilds caused by auth state changes / role switches.
-     */
-    private var iconMap: Map<String, List<SvgElement>> = emptyMap()
     private var activeIndex: Int = 0
-    private var badges: Map<String, Int> = emptyMap()
-    private var dotBadges: Set<String> = emptySet()
 
     // Theme
     private var bgColor: Int = Color.BLACK
@@ -108,104 +130,112 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     private var inactiveColor: Int = Color.parseColor("#3C3C43")
     private var indicatorColor: Int = Color.parseColor("#007AFF")
 
-    // Dimensions
+    // Dimensions (pixels)
     private val density = context.resources.displayMetrics.density
     private val floatingMarginH = (16 * density).roundToInt()
     private val floatingMarginBottom = (12 * density).roundToInt()
     private val cornerRadius = (16 * density)
     private val tabBarHeight = (60 * density).roundToInt()
     private val elevationDp = (8 * density)
-    private val indicatorHeight = (3 * density)
-    private val indicatorTopRadius = (1.5f * density)
-    private val iconSizePx = (24 * density).roundToInt()
-    private val badgeRadius = (4 * density)
-    private val badgeTextSize = 10f * density
-    private val activeCardCornerRadius = (10 * density)
-    private val activeCardPaddingH = (10 * density).roundToInt()
-    private val activeCardPaddingV = (6 * density).roundToInt()
-    private val activeCardMargin = (6 * density).roundToInt()
-    private val badgeOffsetX = (12 * density)
-    private val badgeOffsetY = (4 * density)
-    private val badgeMinWidth = (16 * density)
-    private val badgePaddingH = (4 * density)
 
     private var bottomInset: Int = 0
     private var isBarVisible: Boolean = true
     private var visibilityAnimator: ValueAnimator? = null
 
-    // ── PorterDuff Color Filter Manager (Phase 3) ───────────────────────
-    // GPU-accelerated color blending, Telegram-style. Cached per color.
-    companion object ColorFilterManager {
-        private val filterCache = mutableMapOf<Int, PorterDuffColorFilter>()
+    // ── Compose reactive state ───────────────────────────────────────────
+    private val tabsState           = mutableStateOf<List<TabItem>>(emptyList())
+    private val activeIndexState    = mutableStateOf(0)
+    private val activeColorIntState = mutableStateOf(Color.parseColor("#007AFF"))
+    private val inactiveColorIntState   = mutableStateOf(Color.parseColor("#3C3C43"))
+    private val indicatorColorIntState  = mutableStateOf(Color.parseColor("#007AFF"))
+    private val badgesState         = mutableStateOf<Map<String, Int>>(emptyMap())
+    private val dotBadgesState      = mutableStateOf<Set<String>>(emptySet())
 
-        fun getColorFilter(color: Int): PorterDuffColorFilter {
-            return filterCache.getOrPut(color) {
-                PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN)
-            }
-        }
-
-        fun clearFilterCache() {
-            filterCache.clear()
+    companion object {
+        /** camelCase icon name → Lucide ImageVector. Add entries here to support more icons. */
+        private val LUCIDE_ICON_MAP: Map<String, ImageVector> by lazy {
+            mapOf(
+                "house"          to Lucide.House,
+                "home"           to Lucide.House,
+                "search"         to Lucide.Search,
+                "logIn"          to Lucide.LogIn,
+                "log-in"         to Lucide.LogIn,
+                "plusCircle"     to Lucide.PlusCircle,
+                "plus-circle"    to Lucide.PlusCircle,
+                "messageCircle"  to Lucide.MessageCircle,
+                "message-circle" to Lucide.MessageCircle,
+                "user"           to Lucide.User,
+                "bell"           to Lucide.Bell,
+                "settings"       to Lucide.Settings,
+                "heart"          to Lucide.Heart,
+                "bookmark"       to Lucide.Bookmark,
+                "calendar"       to Lucide.Calendar,
+                "camera"         to Lucide.Camera,
+                "image"          to Lucide.Image,
+                "mail"           to Lucide.Mail,
+                "map"            to Lucide.Map,
+                "mapPin"         to Lucide.MapPin,
+                "map-pin"        to Lucide.MapPin,
+                "menu"           to Lucide.Menu,
+                "phone"          to Lucide.Phone,
+                "star"           to Lucide.Star,
+            )
         }
     }
 
-    // ── Layers ──────────────────────────────────────────────────────────
-    // Fallback drawable — flat color shown until blur activates (or if blur root not found).
+    // ── Layers ────────────────────────────────────────────────────────────
+
     private val pillDrawable = GradientDrawable().apply {
-        setColor(Color.argb(0xA3, 0, 0, 0))   // #000000 @ 64 % — Figma spec fallback
+        setColor(Color.argb(0xA3, 0, 0, 0))
         cornerRadius = this@TelegramTabBarView.cornerRadius
     }
 
-    // Layer 0: BlurViewGroup — captures the sibling screens container (not the decor view)
-    // to produce a true frosted-glass effect without the full-screen overlay artifact.
+    // Layer 0: frosted-glass blur pill
     private val blurBackground = BlurViewGroup(context, null).also { v ->
-        v.background = pillDrawable     // Flat fallback until blur root is found
+        v.background = pillDrawable
         v.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
                 outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
             }
         }
         v.clipToOutline = true
-        v.clipChildren = true
-        v.elevation = elevationDp
-        v.blurRounds = 4
+        v.clipChildren  = true
+        v.elevation     = elevationDp
+        v.blurRounds    = 4
         v.setDownsampleFactor(4.0f)
     }
 
-    private val contentOverlay = ContentOverlayView(context)
+    // Layer 1: Compose UI (tabs, white card, indicator, badges)
+    private val contentOverlay = ComposeView(context).apply {
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        setContent { TabBarContent() }
+    }
 
     var onTabPress: ((String) -> Unit)? = null
     var onTabLongPress: ((String) -> Unit)? = null
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
-        clipChildren = false
+        clipChildren  = false
         clipToPadding = false
 
-        // Layer 0: blur background
-        addView(blurBackground, LayoutParams(
-            LayoutParams.MATCH_PARENT, tabBarHeight
-        ).apply {
-            gravity = Gravity.BOTTOM
-            leftMargin = floatingMarginH
-            rightMargin = floatingMarginH
+        addView(blurBackground, LayoutParams(LayoutParams.MATCH_PARENT, tabBarHeight).apply {
+            gravity      = Gravity.BOTTOM
+            leftMargin   = floatingMarginH
+            rightMargin  = floatingMarginH
             bottomMargin = floatingMarginBottom
         })
 
-        // Layer 2: content on top (no blur)
-        addView(contentOverlay, LayoutParams(
-            LayoutParams.MATCH_PARENT, tabBarHeight
-        ).apply {
-            gravity = Gravity.BOTTOM
-            leftMargin = floatingMarginH
-            rightMargin = floatingMarginH
+        addView(contentOverlay, LayoutParams(LayoutParams.MATCH_PARENT, tabBarHeight).apply {
+            gravity      = Gravity.BOTTOM
+            leftMargin   = floatingMarginH
+            rightMargin  = floatingMarginH
             bottomMargin = floatingMarginBottom
         })
 
-        // Edge-to-edge: use ViewCompat for reliable insets across all API levels
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-            val navInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            bottomInset = navInsets.bottom  // Always in pixels
+            val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            bottomInset = nav.bottom
             updateMargins()
             insets
         }
@@ -214,9 +244,6 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         ViewCompat.requestApplyInsets(this)
-        // post{} ensures BlurViewGroup.onAttachedToWindow() has already run
-        // (Android dispatches parent first, then children, so children attach during super call above;
-        //  post{} queues after the current dispatch so fields are initialised).
         post { setupBlur() }
     }
 
@@ -227,24 +254,14 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
 
     private var isBlurInitialized = false
 
-    /** Flat pill color — Figma spec. Used as fallback when blur root is unavailable. */
-    private fun pillColor(bgColor: Int): Int {
-        val luminance = (0.2126 * Color.red(bgColor) + 0.7152 * Color.green(bgColor) +
-                0.0722 * Color.blue(bgColor)) / 255.0
-        return if (luminance < 0.4) Color.argb(0xA3, 48, 48, 56)
-        else Color.argb(0xA3, 0, 0, 0)
+    private fun pillColor(bg: Int): Int {
+        val lum = (0.2126 * Color.red(bg) + 0.7152 * Color.green(bg) + 0.0722 * Color.blue(bg)) / 255.0
+        return if (lum < 0.4) Color.argb(0xA3, 48, 48, 56) else Color.argb(0xA3, 0, 0, 0)
     }
 
-    /**
-     * Overlay color rendered on top of the blur — matches Figma spec: #000000 @ 64%.
-     * Light theme: black 64% → dark frosted pill (matches mockup).
-     * Dark  theme: charcoal 64% → pill stays distinguishable on dark background.
-     */
-    private fun blurOverlayColor(bgColor: Int): Int {
-        val luminance = (0.2126 * Color.red(bgColor) + 0.7152 * Color.green(bgColor) +
-                0.0722 * Color.blue(bgColor)) / 255.0
-        return if (luminance < 0.4) Color.argb(0xA3, 48, 48, 56)  // dark theme  — charcoal 64 %
-        else Color.argb(0xA3, 0, 0, 0)                              // light theme — black   64 % (Figma)
+    private fun blurOverlayColor(bg: Int): Int {
+        val lum = (0.2126 * Color.red(bg) + 0.7152 * Color.green(bg) + 0.0722 * Color.blue(bg)) / 255.0
+        return if (lum < 0.4) Color.argb(0xA3, 48, 48, 56) else Color.argb(0xA3, 0, 0, 0)
     }
 
     private fun setupBlur() {
@@ -257,25 +274,15 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     }
 
     /**
-     * Redirects QmBlurView's blur capture root from the activity decor view to
-     * the SIBLING screens container (the ViewGroup that holds the navigation screens).
-     *
-     * In React Navigation bottom tabs the hierarchy is:
-     *   BottomTabNavigator root
-     *     ├── ScreensContainer   ← this is what we want to blur
-     *     └── TelegramTabBarView ← us
-     *
-     * Using the sibling (not the decor view) eliminates the full-screen overlay artifact
-     * because the BlurView only captures the content it floats over.
+     * Redirects QmBlurView's root from the Activity decor view to the sibling
+     * screens container, eliminating the full-screen overlay artefact.
      */
     private fun swapBlurRootToSibling() {
         val sibling = findScreensContainer() ?: return
-        // Blur root found — clear the flat-color fallback
         blurBackground.background = null
-
         try {
-            val blurViewGroupClass = BlurViewGroup::class.java
-            val baseField = blurViewGroupClass.getDeclaredField("mBaseBlurViewGroup")
+            val blurGroupClass = BlurViewGroup::class.java
+            val baseField = blurGroupClass.getDeclaredField("mBaseBlurViewGroup")
             baseField.isAccessible = true
             val base = baseField.get(blurBackground) ?: return
 
@@ -285,39 +292,27 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
             decorViewField.isAccessible = true
             val oldRoot = decorViewField.get(base) as? View
 
-            val preDrawListenerField = baseClass.getDeclaredField("preDrawListener")
-            preDrawListenerField.isAccessible = true
-            val listener = preDrawListenerField.get(base) as? ViewTreeObserver.OnPreDrawListener
+            val listenerField = baseClass.getDeclaredField("preDrawListener")
+            listenerField.isAccessible = true
+            val listener = listenerField.get(base) as? ViewTreeObserver.OnPreDrawListener
 
             if (listener != null && oldRoot != null) {
                 try { oldRoot.viewTreeObserver.removeOnPreDrawListener(listener) } catch (_: Exception) {}
                 decorViewField.set(base, sibling)
                 sibling.viewTreeObserver.addOnPreDrawListener(listener)
-
-                baseClass.getDeclaredField("mDifferentRoot").also {
-                    it.isAccessible = true; it.setBoolean(base, true)
-                }
-                baseClass.getDeclaredField("mForceRedraw").also {
-                    it.isAccessible = true; it.setBoolean(base, true)
-                }
+                baseClass.getDeclaredField("mDifferentRoot").also { it.isAccessible = true; it.setBoolean(base, true) }
+                baseClass.getDeclaredField("mForceRedraw").also  { it.isAccessible = true; it.setBoolean(base, true) }
             }
         } catch (_: Exception) {
-            // Reflection failed — restore flat-color fallback
             blurBackground.background = pillDrawable
         }
     }
 
     private fun findScreensContainer(): ViewGroup? {
-        // The screens container is the first sibling child of the same parent.
-        // In React Navigation bottom tabs both the screens stack and the tab bar
-        // share the same parent ViewGroup.
         val parent = this.parent as? ViewGroup ?: return null
         for (i in 0 until parent.childCount) {
             val child = parent.getChildAt(i)
-            if (child !== this && child is ViewGroup) {
-                android.util.Log.d("TelegramTabBar", "blur root → ${child.javaClass.simpleName}")
-                return child
-            }
+            if (child !== this && child is ViewGroup) return child
         }
         return null
     }
@@ -330,86 +325,41 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         requestLayout()
     }
 
-    // ── Public API ──────────────────────────────────────────────────────
+    // ── Public API ────────────────────────────────────────────────────────
 
     fun setTabs(newTabs: List<TabItem>) {
-        // Compare only route keys — SVG data is now in iconMap and must not
-        // trigger an unnecessary rebuild when it differs from the cached version.
-        if (tabs.map { it.key } == newTabs.map { it.key } && tabs.size == newTabs.size) return
+        if (tabs == newTabs) return
         tabs = newTabs
-        contentOverlay.rebuildTabs()
-        // After the full RN prop batch completes, re-sync card visibility to the
-        // FINAL activeIndex value. This post{} runs after all @ReactProp calls in
-        // this batch (tabs, activeIndex, theme) have been applied, so activeIndex
-        // is guaranteed to be up-to-date. Fixes the white-card disappearing after
-        // auth changes the tab count while activeIndex stays the same value
-        // (guard in setActiveIndex skips updateTabAppearance in that case).
-        contentOverlay.post {
-            contentOverlay.requestLayout()
-            contentOverlay.updateTabAppearance()
-            contentOverlay.invalidate()
-        }
+        tabsState.value = newTabs
     }
 
-    fun setIconMap(newMap: Map<String, List<SvgElement>>) {
-        if (iconMap == newMap) return
-        iconMap = newMap
-        // Rebuild so icons appear even when setTabs was applied before setIconMap
-        // (React Native does not guarantee prop delivery order).
-        if (tabs.isNotEmpty()) {
-            contentOverlay.rebuildTabs()
-            contentOverlay.post {
-                contentOverlay.requestLayout()
-                contentOverlay.invalidate()
-            }
-        }
-    }
+    /** Legacy: no-op — icons now come from TabItem.iconName. */
+    fun setIconMap(@Suppress("UNUSED_PARAMETER") newMap: Map<String, List<SvgElement>>) = Unit
 
     fun setActiveIndex(index: Int) {
-        val newIndex = index.coerceIn(0, max(0, tabs.size - 1))
-        val changed = newIndex != activeIndex
-        activeIndex = newIndex
-        if (changed || contentOverlay.indicatorAnimator != null) {
-            contentOverlay.animateIndicatorTo(activeIndex)
-        }
-        // Always sync white card — guard was preventing re-sync after rebuildTabs()
-        // when activeIndex value didn't change (e.g. stays on same tab after auth).
-        contentOverlay.updateTabAppearance()
+        val clamped = index.coerceIn(0, max(0, tabs.size - 1))
+        activeIndex = clamped
+        activeIndexState.value = clamped
     }
 
     fun setBadges(newBadges: Map<String, Int>) {
-        val old = badges
-        badges = newBadges
-        if (old != newBadges) {
-            for ((k, c) in newBadges) if (c > 0 && (old[k] ?: 0) == 0) contentOverlay.animateBadgeIn(k)
-            for ((k, c) in old) if (c > 0 && (newBadges[k] ?: 0) == 0) contentOverlay.animateBadgeOut(k)
-            contentOverlay.invalidate()
-        }
+        badgesState.value = newBadges
     }
 
     fun setDotBadges(newDotBadges: Set<String>) {
-        if (dotBadges == newDotBadges) return
-        val old = dotBadges
-        dotBadges = newDotBadges
-        for (key in newDotBadges) if (key !in old) contentOverlay.animateBadgeIn(key)
-        for (key in old) if (key !in newDotBadges && (badges[key] ?: 0) == 0) contentOverlay.animateBadgeOut(key)
-        contentOverlay.invalidate()
+        dotBadgesState.value = newDotBadges
     }
 
     fun setThemeColors(bg: Int, active: Int, inactive: Int, indicator: Int) {
         bgColor = bg; activeColor = active; inactiveColor = inactive; indicatorColor = indicator
-        if (isBlurInitialized) {
-            blurBackground.setOverlayColor(blurOverlayColor(bgColor))
-        } else {
-            pillDrawable.setColor(pillColor(bgColor))
-        }
-        contentOverlay.updateTabAppearance()
-        contentOverlay.invalidate()
+        activeColorIntState.value     = active
+        inactiveColorIntState.value   = inactive
+        indicatorColorIntState.value  = indicator
+        if (isBlurInitialized) blurBackground.setOverlayColor(blurOverlayColor(bg))
+        else pillDrawable.setColor(pillColor(bg))
     }
 
     fun setBottomInset(inset: Int) {
-        // Fallback only: use JS value (in dp) when native insets haven't arrived yet.
-        // Convert dp → px since native layout works in pixels.
         if (bottomInset == 0 && inset > 0) {
             bottomInset = (inset * density).roundToInt()
             updateMargins()
@@ -425,10 +375,8 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     private fun animateVisibility(show: Boolean) {
         visibilityAnimator?.cancel()
         val totalH = tabBarHeight + floatingMarginBottom + bottomInset + (8 * density).roundToInt()
-        val fromY = translationY
         val toY = if (show) 0f else totalH.toFloat()
-
-        visibilityAnimator = ValueAnimator.ofFloat(fromY, toY).apply {
+        visibilityAnimator = ValueAnimator.ofFloat(translationY, toY).apply {
             duration = 250L
             interpolator = PathInterpolator(0.4f, 0f, 0.2f, 1f)
             addUpdateListener { translationY = it.animatedValue as Float }
@@ -447,652 +395,152 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
             MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
         )
     }
+
     // ═════════════════════════════════════════════════════════════════════
-    // ═══ Layer 2: Content (tabs, indicator, badges — always sharp) ═════
+    // ═══ Compose content: icons, white card, indicator, badges ══════════
     // ═════════════════════════════════════════════════════════════════════
 
-    inner class ContentOverlayView(context: Context) : ViewGroup(context) {
+    @Composable
+    private fun TabBarContent() {
+        val tabs             by tabsState
+        val activeIndex      by activeIndexState
+        val activeColorInt   by activeColorIntState
+        val inactiveColorInt by inactiveColorIntState
+        val indicatorColorInt by indicatorColorIntState
+        val badges           by badgesState
+        val dotBadges        by dotBadgesState
 
-        private val indicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        private val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL; color = Color.parseColor("#FF3B30")
-        }
-        private val badgeTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE; textSize = badgeTextSize
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-        }
-        private val indicatorRect = RectF()
-        private val badgeRect = RectF()
-        private val telegramInterpolator = PathInterpolator(0.4f, 0f, 0.2f, 1f)
+        val haptic = LocalHapticFeedback.current
 
-        var indicatorAnimator: ValueAnimator? = null
-        private var currentIndicatorX = 0f
-        private var targetIndicatorX = 0f
-        private val badgeScales = mutableMapOf<String, Float>()
-        private val badgeAlphas = mutableMapOf<String, Float>()
+        // Smooth indicator position (in tab-index units; Canvas converts to pixels)
+        val indicatorAnim by animateFloatAsState(
+            targetValue    = activeIndex.toFloat(),
+            animationSpec  = tween(durationMillis = 250),
+            label          = "indicator"
+        )
 
-        // Phase 3/5: Track per-tab color animators for proper cancellation
-        private val tabColorAnimators = mutableMapOf<Int, ValueAnimator>()
-        // Phase 5: Track per-tab bounce animators for cancellation
-        private val tabBounceAnimators = mutableMapOf<Int, AnimatorSet>()
+        Box(modifier = Modifier.fillMaxSize()) {
 
-        private val tabHolders = mutableListOf<TabViewHolder>()
+            // ── Tab cells ──────────────────────────────────────────────
+            Row(modifier = Modifier.fillMaxSize()) {
+                tabs.forEachIndexed { index, tab ->
+                    val isActive = index == activeIndex
 
-        init {
-            setWillNotDraw(false)
-            clipChildren = false
-            clipToPadding = false
-            setBackgroundColor(Color.TRANSPARENT)
-            // Empty outline — no shadow drawn, but translationZ still controls z-order
-            outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setEmpty()
-                }
-            }
-            // CRITICAL: Must be above blurBackground which has elevation.
-            // Use translationZ (not elevation) to avoid drawing a shadow.
-            translationZ = elevationDp + 0.1f
-        }
+                    val iconColor by animateColorAsState(
+                        targetValue   = if (isActive) activeColorInt.toComposeColor()
+                                        else inactiveColorInt.toComposeColor(),
+                        animationSpec = tween(durationMillis = 200),
+                        label         = "tabColor_$index"
+                    )
 
-        fun rebuildTabs() {
-            removeAllViews()
-            tabHolders.clear()
-
-            for (i in tabs.indices) {
-                val tab = tabs[i]
-                val isActive = i == activeIndex
-
-                // Wrapper with ripple
-                val wrapper = FrameLayout(context)
-                val tv = TypedValue()
-                context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, tv, true)
-                wrapper.foreground = ContextCompat.getDrawable(context, tv.resourceId)
-                wrapper.isClickable = true
-                wrapper.isFocusable = true
-
-                // Layer 1: white card background — LayoutParams set ONCE, never changed
-                // Visibility is toggled instead to avoid layout pass bugs
-                val cardView = View(context).apply {
-                    background = GradientDrawable().apply {
-                        setColor(Color.WHITE)
-                        cornerRadius = activeCardCornerRadius
-                    }
-                    visibility = if (isActive) View.VISIBLE else View.INVISIBLE
-                }
-                wrapper.addView(cardView, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    Gravity.CENTER
-                ).apply { setMargins(activeCardMargin, activeCardMargin, activeCardMargin, activeCardMargin) })
-
-                // iconMap (sent once on mount) takes priority; fall back to
-                // svgPaths embedded in the tab item for backward compatibility.
-                val svgData = iconMap[tab.key]?.takeIf { it.isNotEmpty() }
-                    ?: tab.svgPaths?.takeIf { it.isNotEmpty() }
-
-                // Layer 2: icon + label column — only added when SVG data is available.
-                // When no SVG data, the RN overlay handles icon/label rendering; the
-                // native layer only provides the pill shape, white card, and touch wrappers.
-                val column: LinearLayout?
-                val iconView: View?
-                val labelView: TextView?
-
-                if (svgData != null) {
-                    val rawColor = if (isActive) activeColor else inactiveColor
-                    val iconColor = Color.rgb(Color.red(rawColor), Color.green(rawColor), Color.blue(rawColor))
-
-                    val col = LinearLayout(context).apply {
-                        orientation = LinearLayout.VERTICAL
-                        gravity = Gravity.CENTER
-                    }
-                    val iv = SvgIconView(context, svgData).apply { setColor(iconColor) }
-                    col.addView(iv, LinearLayout.LayoutParams(iconSizePx, iconSizePx).apply {
-                        gravity = Gravity.CENTER_HORIZONTAL
-                    })
-                    val lv = TextView(context).apply {
-                        text = tab.title
-                        textSize = 10f
-                        setTextColor(Color.rgb(Color.red(rawColor), Color.green(rawColor), Color.blue(rawColor)))
-                        typeface = if (isActive) Typeface.create("sans-serif-medium", Typeface.BOLD)
-                            else Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                        gravity = Gravity.CENTER
-                        setPadding(0, (1 * density).roundToInt(), 0, 0)
-                        maxLines = 1
-                    }
-                    col.addView(lv, LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    ))
-                    wrapper.addView(col, FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        Gravity.CENTER
-                    ))
-                    column = col; iconView = iv; labelView = lv
-                } else {
-                    column = null; iconView = null; labelView = null
-                }
-
-                // Bounce the column if native icons exist, otherwise just haptic + event.
-                wrapper.setOnClickListener {
-                    it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP,
-                        HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
-                    column?.let { col -> animateTabBounce(i, col) }
-                    onTabPress?.invoke(tab.key)
-                }
-                wrapper.setOnLongClickListener {
-                    it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,
-                        HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
-                    onTabLongPress?.invoke(tab.key)
-                    true
-                }
-
-                addView(wrapper)
-                tabHolders.add(TabViewHolder(wrapper, cardView, column, iconView, labelView))
-            }
-
-            // Init badge states (numeric badges and dot badges)
-            for (tab in tabs) {
-                val hasBadge = (badges[tab.key] ?: 0) > 0 || dotBadges.contains(tab.key)
-                badgeScales.putIfAbsent(tab.key, if (hasBadge) 1f else 0f)
-                badgeAlphas.putIfAbsent(tab.key, if (hasBadge) 1f else 0f)
-            }
-
-            post {
-                if (tabs.isNotEmpty() && width > 0) {
-                    currentIndicatorX = activeIndex * (width.toFloat() / tabs.size)
-                    targetIndicatorX = currentIndicatorX
-                    invalidate()
-                }
-            }
-            requestLayout()
-            invalidate()
-        }
-
-        private fun resolveIcon(iconName: String?, fallbackKey: String): Drawable? {
-            val name = iconName ?: fallbackKey
-            // Try to find drawable resource by name
-            val resId = context.resources.getIdentifier(name, "drawable", context.packageName)
-            if (resId != 0) return ContextCompat.getDrawable(context, resId)
-
-            // Try with ic_ prefix
-            val resId2 = context.resources.getIdentifier("ic_$name", "drawable", context.packageName)
-            if (resId2 != 0) return ContextCompat.getDrawable(context, resId2)
-
-            // Try Material symbols / system icons
-            val resId3 = context.resources.getIdentifier(name, "drawable", "android")
-            if (resId3 != 0) return ContextCompat.getDrawable(context, resId3)
-
-            return null
-        }
-
-        // ── Tab bounce animation (Phase 5: Telegram-style 3-phase) ──────
-
-        private fun animateTabBounce(tabIndex: Int, targetView: View) {
-            // Cancel any in-progress bounce for this tab
-            tabBounceAnimators[tabIndex]?.cancel()
-
-            val scaleUp = 1.2f       // More pronounced than original 1.15f
-            val scaleOvershoot = 0.95f  // Dip below baseline for spring feel
-
-            val bounceUp = AnimatorSet().apply {
-                playTogether(
-                    ObjectAnimator.ofFloat(targetView, "scaleX", 1f, scaleUp),
-                    ObjectAnimator.ofFloat(targetView, "scaleY", 1f, scaleUp)
-                )
-                duration = 100
-                interpolator = telegramInterpolator
-            }
-
-            // Overshoot phase: quick dip below 1.0 for spring feel
-            val bounceOvershoot = AnimatorSet().apply {
-                playTogether(
-                    ObjectAnimator.ofFloat(targetView, "scaleX", scaleUp, scaleOvershoot),
-                    ObjectAnimator.ofFloat(targetView, "scaleY", scaleUp, scaleOvershoot)
-                )
-                duration = 80
-                interpolator = telegramInterpolator
-            }
-
-            val bounceDown = AnimatorSet().apply {
-                playTogether(
-                    ObjectAnimator.ofFloat(targetView, "scaleX", scaleOvershoot, 1f),
-                    ObjectAnimator.ofFloat(targetView, "scaleY", scaleOvershoot, 1f)
-                )
-                duration = 120
-                interpolator = OvershootInterpolator(1.5f)
-            }
-
-            val fullBounce = AnimatorSet().apply {
-                playSequentially(bounceUp, bounceOvershoot, bounceDown)
-                addListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(a: Animator) {
-                        tabBounceAnimators.remove(tabIndex)
-                    }
-                })
-                start()
-            }
-            tabBounceAnimators[tabIndex] = fullBounce
-        }
-
-        fun updateTabAppearance() {
-            for (i in tabHolders.indices) {
-                val holder = tabHolders[i]
-                val isActive = i == activeIndex
-
-                // Toggle card visibility — always done, regardless of icon mode
-                holder.cardView.visibility = if (isActive) View.VISIBLE else View.INVISIBLE
-
-                // Icon/label color animation — only when native icons are present
-                val iv = holder.iconView ?: continue
-                val lv = holder.labelView ?: continue
-
-                val rawColor = if (isActive) activeColor else inactiveColor
-                val color = Color.rgb(Color.red(rawColor), Color.green(rawColor), Color.blue(rawColor))
-
-                tabColorAnimators[i]?.cancel()
-
-                val currentColor = when (iv) {
-                    is SvgIconView -> iv.getColor()
-                    is ImageView -> iv.imageTintList?.defaultColor ?: inactiveColor
-                    else -> inactiveColor
-                }
-
-                val animator = ValueAnimator.ofArgb(currentColor, color).apply {
-                    duration = 200
-                    interpolator = telegramInterpolator
-                    addUpdateListener { anim ->
-                        val c = anim.animatedValue as Int
-                        when (iv) {
-                            is SvgIconView -> iv.setColor(c)
-                            is ImageView -> iv.colorFilter = getColorFilter(c)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .combinedClickable(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    this@TelegramTabBarView.onTabPress?.invoke(tab.key)
+                                },
+                                onLongClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    this@TelegramTabBarView.onTabLongPress?.invoke(tab.key)
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // White active-card background
+                        if (isActive) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(6.dp)
+                                    .background(ComposeColor.White, RoundedCornerShape(10.dp))
+                            )
                         }
-                        lv.setTextColor(c)
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(a: Animator) { tabColorAnimators.remove(i) }
-                    })
-                    start()
-                }
-                tabColorAnimators[i] = animator
 
-                lv.typeface = if (isActive) Typeface.create("sans-serif-medium", Typeface.BOLD)
-                    else Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            }
-        }
+                        // Icon + label
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            val iv = LUCIDE_ICON_MAP[tab.iconName]
+                            if (iv != null) {
+                                Icon(
+                                    imageVector      = iv,
+                                    contentDescription = tab.title,
+                                    tint             = iconColor,
+                                    modifier         = Modifier.size(22.dp)
+                                )
+                            }
+                            if (tab.title.isNotEmpty()) {
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text       = tab.title,
+                                    color      = iconColor,
+                                    fontSize   = 10.sp,
+                                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                                    maxLines   = 1,
+                                    overflow   = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
 
-        // ── Indicator ───────────────────────────────────────────────────
-
-        fun animateIndicatorTo(index: Int) {
-            if (tabs.isEmpty() || width == 0) return
-            val tabWidth = width.toFloat() / tabs.size
-
-            indicatorAnimator?.let {
-                currentIndicatorX = it.animatedValue as? Float ?: currentIndicatorX
-                it.cancel()
-            }
-            targetIndicatorX = index * tabWidth
-
-            indicatorAnimator = ValueAnimator.ofFloat(currentIndicatorX, targetIndicatorX).apply {
-                duration = 250L
-                interpolator = telegramInterpolator
-                addUpdateListener { currentIndicatorX = it.animatedValue as Float; invalidate() }
-                addListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(a: Animator) { indicatorAnimator = null }
-                })
-                start()
-            }
-        }
-
-        // ── Badge animations ────────────────────────────────────────────
-
-        fun animateBadgeIn(key: String) {
-            AnimatorSet().apply {
-                val s = ValueAnimator.ofFloat(0f, 1f).apply {
-                    duration = 250  // Phase 5: Longer for more pronounced spring
-                    interpolator = PathInterpolator(0.34f, 1.6f, 0.64f, 1f)  // Stronger overshoot
-                    addUpdateListener { badgeScales[key] = it.animatedValue as Float; invalidate() }
-                }
-                val a = ValueAnimator.ofFloat(0f, 1f).apply {
-                    duration = 200  // Phase 5: Slightly longer fade
-                    addUpdateListener { badgeAlphas[key] = it.animatedValue as Float }
-                }
-                playTogether(s, a); start()
-            }
-        }
-
-        fun animateBadgeOut(key: String) {
-            AnimatorSet().apply {
-                val s = ValueAnimator.ofFloat(badgeScales[key] ?: 1f, 0f).apply {
-                    duration = 150; interpolator = telegramInterpolator
-                    addUpdateListener { badgeScales[key] = it.animatedValue as Float; invalidate() }
-                }
-                val a = ValueAnimator.ofFloat(badgeAlphas[key] ?: 1f, 0f).apply {
-                    duration = 150
-                    addUpdateListener { badgeAlphas[key] = it.animatedValue as Float }
-                }
-                playTogether(s, a); start()
-            }
-        }
-
-        // ── Measure / Layout ────────────────────────────────────────────
-
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val w = MeasureSpec.getSize(widthMeasureSpec)
-            val n = tabHolders.size
-            if (n > 0) {
-                val tw = w / n
-                val cw = MeasureSpec.makeMeasureSpec(tw, MeasureSpec.EXACTLY)
-                val ch = MeasureSpec.makeMeasureSpec(tabBarHeight, MeasureSpec.EXACTLY)
-                tabHolders.forEach { it.wrapper.measure(cw, ch) }
-            }
-            setMeasuredDimension(w, tabBarHeight)
-        }
-
-        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-            val n = tabHolders.size
-            if (n == 0) return
-            val tw = (r - l) / n
-            tabHolders.forEachIndexed { i, h ->
-                h.wrapper.layout(i * tw, 0, i * tw + tw, tabBarHeight)
-            }
-            if (changed && indicatorAnimator == null) {
-                currentIndicatorX = activeIndex * tw.toFloat()
-                targetIndicatorX = currentIndicatorX
-            }
-        }
-
-        // ── Drawing ─────────────────────────────────────────────────────
-
-        override fun dispatchDraw(canvas: Canvas) {
-            super.dispatchDraw(canvas)
-            drawBadges(canvas)
-        }
-
-        private fun drawIndicator(canvas: Canvas) {
-            if (tabs.isEmpty() || width == 0) return
-            val tw = width.toFloat() / tabs.size
-            val iw = tw * 0.45f
-            indicatorPaint.color = indicatorColor
-            indicatorRect.set(
-                currentIndicatorX + (tw - iw) / 2f, 0f,
-                currentIndicatorX + (tw + iw) / 2f, indicatorHeight
-            )
-            canvas.drawRoundRect(indicatorRect, indicatorTopRadius, indicatorTopRadius, indicatorPaint)
-        }
-
-        private fun drawBadges(canvas: Canvas) {
-            if (tabs.isEmpty() || width == 0) return
-            val tw = width.toFloat() / tabs.size
-
-            for (i in tabs.indices) {
-                val tab = tabs[i]
-                val count = badges[tab.key] ?: 0
-                val isDot = dotBadges.contains(tab.key)
-                val hasBadge = count > 0 || isDot
-                val scale = badgeScales[tab.key] ?: if (hasBadge) 1f else 0f
-                val alpha = badgeAlphas[tab.key] ?: if (hasBadge) 1f else 0f
-                if (scale <= 0.01f) continue
-
-                val cx = i * tw + tw / 2f + badgeOffsetX
-                val cy = badgeOffsetY + 14 * density
-
-                if (isDot && count <= 0) {
-                    // Dot badge: small circle without text
-                    val dotRadius = 4 * density
-                    canvas.save()
-                    canvas.scale(scale, scale, cx, cy)
-                    badgePaint.alpha = (alpha * 255).roundToInt()
-                    canvas.drawCircle(cx, cy, dotRadius, badgePaint)
-                    canvas.restore()
-                } else if (count > 0) {
-                    // Numeric badge (unchanged)
-                    val text = if (count > 99) "99+" else count.toString()
-                    val textW = badgeTextPaint.measureText(text)
-                    val bw = max(badgeMinWidth, textW + badgePaddingH * 2)
-                    val bh = badgeRadius * 2
-
-                    canvas.save()
-                    canvas.scale(scale, scale, cx, cy)
-                    badgePaint.alpha = (alpha * 255).roundToInt()
-                    badgeTextPaint.alpha = (alpha * 255).roundToInt()
-                    badgeRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f)
-                    canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgePaint)
-                    val tb = Rect()
-                    badgeTextPaint.getTextBounds(text, 0, text.length, tb)
-                    canvas.drawText(text, cx, cy + tb.height() / 2f, badgeTextPaint)
-                    canvas.restore()
-                }
-            }
-        }
-    }
-
-    // ═════════════════════════════════════════════════════════════════════
-    // ═══ SVG Icon View — draws lucide-style stroke icons via Canvas ════
-    // ═════════════════════════════════════════════════════════════════════
-
-    /**
-     * Renders SVG icon using pre-transformed, cached paths for optimal performance.
-     *
-     * Architecture (Phases 1-4 from refactoring plan):
-     * - Paths are parsed once from SVG data (ensureParsed)
-     * - Paths are pre-transformed to screen coordinates and cached (PathCache)
-     * - Paint uses fixed stroke width (1.75dp) — never affected by canvas scaling
-     * - Color changes use PorterDuff SRC_IN filters (GPU-accelerated)
-     * - Hardware layer for static state, software layer during color animation
-     *
-     * Performance characteristics:
-     * - First draw: ~2-3ms (parsing + transform + cache)
-     * - Subsequent draws: ~0.5ms (cache hit, zero allocations)
-     * - Color change: ~0.1ms (PorterDuff filter swap)
-     *
-     * Stroke model (Phase 1):
-     *   strokeWidth = 1.75dp * density (fixed, scale-independent)
-     *   Paths transformed via Path.transform(Matrix) — NOT canvas.scale()
-     *   This ensures stroke width is never multiplied by the viewport scale factor.
-     *
-     * Based on Telegram Android patterns:
-     *   ChevronView (1.75dp stroke), AnimatedArrowDrawable (PorterDuff),
-     *   RLottieDrawable (path caching), ImageReceiver (filter caching)
-     */
-    inner class SvgIconView(context: Context, private val elements: List<SvgElement>) : View(context) {
-
-        init {
-            // CRITICAL: Without this, View skips onDraw() entirely!
-            setWillNotDraw(false)
-            // Ensure full opacity
-            alpha = 1f
-        }
-
-        // ── Paint (configured once, color set directly for stroke rendering) ──
-        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 2.5f * context.resources.displayMetrics.density  // 2.5dp — bold, crisp strokes
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-            isDither = true
-            color = Color.BLACK
-        }
-
-        private var iconColor: Int = Color.BLACK
-
-        // ── Source paths (parsed once from SVG data) ────────────────────
-        private val parsedPaths = mutableListOf<Path>()
-        private val parsedCircles = mutableListOf<FloatArray>()  // [cx, cy, r]
-        private val parsedLines = mutableListOf<FloatArray>()    // [x1, y1, x2, y2]
-        private var pathsParsed = false
-
-        // ── Path Cache (Phase 2) ────────────────────────────────────────
-        // Caches pre-transformed paths to avoid per-frame Matrix operations.
-        // Invalidated only on size change.
-        private var cachedScale = -1f
-        private val cachedTransformedPaths = mutableListOf<Path>()
-        private val cachedScaledCircles = mutableListOf<FloatArray>()
-        private val cachedScaledLines = mutableListOf<FloatArray>()
-        // Pre-computed pixel-perfect offsets
-        private var cachedOffsetX = 0f
-        private var cachedOffsetY = 0f
-
-        // Reusable Matrix object — zero allocation in onDraw
-        private val transformMatrix = Matrix()
-
-        fun setColor(color: Int) {
-            if (iconColor == color) return
-            iconColor = color
-            // Direct color for stroke-based rendering (no PorterDuff needed for Canvas strokes)
-            strokePaint.color = color
-            invalidate()
-        }
-
-        fun getColor(): Int = iconColor
-
-        // ── SVG Parsing (once per icon lifecycle) ───────────────────────
-        private fun ensureParsed() {
-            if (pathsParsed) return
-            pathsParsed = true
-
-            for (el in elements) {
-                when (el.type) {
-                    "path" -> {
-                        el.d?.let { d ->
-                            try {
-                                parsedPaths.add(PathParser.createPathFromPathData(d))
-                            } catch (e: Exception) {
-                                android.util.Log.w("SvgIconView", "Failed to parse path: $d", e)
+                        // Badge (dot or numeric)
+                        val count = badges[tab.key] ?: 0
+                        val isDot = dotBadges.contains(tab.key)
+                        if (count > 0 || isDot) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 4.dp, end = 10.dp)
+                            ) {
+                                if (isDot && count == 0) {
+                                    Box(Modifier.size(8.dp).background(ComposeColor(0xFFFF3B30), CircleShape))
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(ComposeColor(0xFFFF3B30), RoundedCornerShape(50))
+                                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text       = if (count > 99) "99+" else count.toString(),
+                                            color      = ComposeColor.White,
+                                            fontSize   = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                    "circle" -> {
-                        val cx = el.cx?.toFloatOrNull() ?: 0f
-                        val cy = el.cy?.toFloatOrNull() ?: 0f
-                        val r = el.r?.toFloatOrNull() ?: 0f
-                        parsedCircles.add(floatArrayOf(cx, cy, r))
-                    }
-                    "line" -> {
-                        val x1 = el.x1?.toFloatOrNull() ?: 0f
-                        val y1 = el.y1?.toFloatOrNull() ?: 0f
-                        val x2 = el.x2?.toFloatOrNull() ?: 0f
-                        val y2 = el.y2?.toFloatOrNull() ?: 0f
-                        parsedLines.add(floatArrayOf(x1, y1, x2, y2))
-                    }
-                    "polyline", "polygon" -> {
-                        el.points?.let { pts ->
-                            try {
-                                val coords = pts.trim().split("[,\\s]+".toRegex()).map { it.toFloat() }
-                                if (coords.size >= 4) {
-                                    val path = Path()
-                                    path.moveTo(coords[0], coords[1])
-                                    for (i in 2 until coords.size step 2) {
-                                        if (i + 1 < coords.size) path.lineTo(coords[i], coords[i + 1])
-                                    }
-                                    if (el.type == "polygon") path.close()
-                                    parsedPaths.add(path)
-                                }
-                            } catch (_: Exception) {}
-                        }
-                    }
-                    "rect" -> {
-                        val x = el.x?.toFloatOrNull() ?: 0f
-                        val y = el.y?.toFloatOrNull() ?: 0f
-                        val w = el.width?.toFloatOrNull() ?: 0f
-                        val h = el.height?.toFloatOrNull() ?: 0f
-                        val rx = el.rx?.toFloatOrNull() ?: 0f
-                        val ry = el.ry?.toFloatOrNull() ?: rx
-                        val path = Path()
-                        path.addRoundRect(RectF(x, y, x + w, y + h), rx, ry, Path.Direction.CW)
-                        parsedPaths.add(path)
-                    }
                 }
             }
 
-            // Apply initial color directly
-            strokePaint.color = iconColor
-        }
-
-        // ── Cache Management (Phase 2) ──────────────────────────────────
-        // Rebuilds transformed paths when scale changes (i.e. on view resize).
-        // In steady state, onDraw only reads from cache — zero allocations.
-        private fun ensureCached(scale: Float) {
-            if (cachedScale == scale) return
-            cachedScale = scale
-
-            // Pre-transform paths
-            transformMatrix.setScale(scale, scale)
-            cachedTransformedPaths.clear()
-            for (path in parsedPaths) {
-                val transformed = Path()
-                path.transform(transformMatrix, transformed)
-                cachedTransformedPaths.add(transformed)
+            // ── Sliding indicator line at top of pill ──────────────────
+            if (tabs.isNotEmpty()) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val tabWidth = size.width / tabs.size
+                    val iw = tabWidth * 0.45f
+                    val ix = indicatorAnim * tabWidth + (tabWidth - iw) / 2f
+                    drawRoundRect(
+                        color       = indicatorColorInt.toComposeColor(),
+                        topLeft     = Offset(ix, 0f),
+                        size        = Size(iw, 3.dp.toPx()),
+                        cornerRadius = CornerRadius(1.5.dp.toPx())
+                    )
+                }
             }
-
-            // Pre-scale circles
-            cachedScaledCircles.clear()
-            for (circle in parsedCircles) {
-                cachedScaledCircles.add(floatArrayOf(
-                    circle[0] * scale,
-                    circle[1] * scale,
-                    circle[2] * scale
-                ))
-            }
-
-            // Pre-scale lines
-            cachedScaledLines.clear()
-            for (line in parsedLines) {
-                cachedScaledLines.add(floatArrayOf(
-                    line[0] * scale,
-                    line[1] * scale,
-                    line[2] * scale,
-                    line[3] * scale
-                ))
-            }
-
-            // Pixel-perfect centering (rounded to avoid sub-pixel blur)
-            val viewportSize = 24f
-            cachedOffsetX = ((width - viewportSize * scale) / 2f).roundToInt().toFloat()
-            cachedOffsetY = ((height - viewportSize * scale) / 2f).roundToInt().toFloat()
-        }
-
-        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-            super.onSizeChanged(w, h, oldw, oldh)
-            cachedScale = -1f  // Force cache rebuild on next draw
-        }
-
-        // ── Drawing ───────────────────────────────────────────────────────
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            ensureParsed()
-
-            android.util.Log.d("SvgIconView", "onDraw: w=$width h=$height paths=${parsedPaths.size} circles=${parsedCircles.size} lines=${parsedLines.size} color=${String.format("#%08X", iconColor)} paintAlpha=${strokePaint.alpha} strokeW=${strokePaint.strokeWidth}")
-
-            if (parsedPaths.isEmpty() && parsedCircles.isEmpty() && parsedLines.isEmpty()) return
-
-            // Force color and full opacity every frame
-            strokePaint.color = iconColor
-            strokePaint.alpha = 255
-
-            // Lucide icons are designed in a 24×24 viewport
-            val viewportSize = 24f
-            val scale = min(width.toFloat(), height.toFloat()) / viewportSize
-
-            // Ensure cache is populated (no-op if scale unchanged)
-            ensureCached(scale)
-
-            canvas.save()
-            canvas.translate(cachedOffsetX, cachedOffsetY)
-
-            // Draw from cache
-            for (path in cachedTransformedPaths) {
-                canvas.drawPath(path, strokePaint)
-            }
-            for (circle in cachedScaledCircles) {
-                canvas.drawCircle(circle[0], circle[1], circle[2], strokePaint)
-            }
-            for (line in cachedScaledLines) {
-                canvas.drawLine(line[0], line[1], line[2], line[3], strokePaint)
-            }
-
-            canvas.restore()
         }
     }
+
+    // ── Helper: Android Color Int → Compose Color ─────────────────────────
+
+    private fun Int.toComposeColor() = ComposeColor(
+        red   = Color.red(this)   / 255f,
+        green = Color.green(this) / 255f,
+        blue  = Color.blue(this)  / 255f,
+        alpha = Color.alpha(this) / 255f
+    )
 }

@@ -32,6 +32,15 @@ android {
     jvmTarget = '17'
   }
 
+  buildFeatures {
+    compose true
+  }
+
+  composeOptions {
+    // Compatible with Kotlin 1.9.22
+    kotlinCompilerExtensionVersion '1.5.9'
+  }
+
   sourceSets {
     main {
       java.srcDirs += ['src/main/kotlin']
@@ -49,4 +58,16 @@ dependencies {
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
   implementation "androidx.core:core-ktx:1.15.0"
   implementation 'com.qmdeve.blurview:core:1.1.4'
+
+  // Jetpack Compose
+  def composeBom = platform('androidx.compose:compose-bom:2024.06.00')
+  implementation composeBom
+  implementation 'androidx.compose.ui:ui'
+  implementation 'androidx.compose.foundation:foundation'
+  implementation 'androidx.compose.runtime:runtime'
+  implementation 'androidx.compose.material3:material3'
+  implementation 'androidx.activity:activity-compose:1.9.0'
+
+  // Lucide icons for Compose
+  implementation 'br.com.devsrsouza.compose.icons:lucide:1.0.0'
 }
