@@ -54,26 +54,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import br.com.devsrsouza.compose.icons.Lucide
-import br.com.devsrsouza.compose.icons.lucide.Bell
-import br.com.devsrsouza.compose.icons.lucide.Bookmark
-import br.com.devsrsouza.compose.icons.lucide.Calendar
-import br.com.devsrsouza.compose.icons.lucide.Camera
-import br.com.devsrsouza.compose.icons.lucide.Heart
-import br.com.devsrsouza.compose.icons.lucide.House
-import br.com.devsrsouza.compose.icons.lucide.Image
-import br.com.devsrsouza.compose.icons.lucide.LogIn
-import br.com.devsrsouza.compose.icons.lucide.Mail
-import br.com.devsrsouza.compose.icons.lucide.Map
-import br.com.devsrsouza.compose.icons.lucide.MapPin
-import br.com.devsrsouza.compose.icons.lucide.Menu
-import br.com.devsrsouza.compose.icons.lucide.MessageCircle
-import br.com.devsrsouza.compose.icons.lucide.Phone
-import br.com.devsrsouza.compose.icons.lucide.PlusCircle
-import br.com.devsrsouza.compose.icons.lucide.Search
-import br.com.devsrsouza.compose.icons.lucide.Settings
-import br.com.devsrsouza.compose.icons.lucide.Star
-import br.com.devsrsouza.compose.icons.lucide.User
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Login
+import androidx.compose.material.icons.outlined.*
 import com.qmdeve.blurview.base.BaseBlurViewGroup
 import com.qmdeve.blurview.widget.BlurViewGroup
 import kotlin.math.max
@@ -86,7 +69,7 @@ import kotlin.math.roundToInt
  *   Layer 0: BlurBackground (QmBlurView — frosted-glass pill with elevation shadow)
  *   Layer 1: ComposeView   (icons, labels, indicator, badges — crisp Compose rendering)
  *
- * Icons are rendered natively via compose-icons/lucide (ImageVector).
+ * Icons are rendered natively via Material Icons Extended (ImageVector).
  * Touch is handled by Modifier.combinedClickable — no native touch conflicts.
  */
 class TelegramTabBarView(context: Context) : FrameLayout(context) {
@@ -152,33 +135,33 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     private val dotBadgesState      = mutableStateOf<Set<String>>(emptySet())
 
     companion object {
-        /** camelCase icon name → Lucide ImageVector. Add entries here to support more icons. */
+        /** camelCase icon name → Material ImageVector. Add entries here to support more icons. */
         private val LUCIDE_ICON_MAP: Map<String, ImageVector> by lazy {
             mapOf(
-                "house"          to Lucide.House,
-                "home"           to Lucide.House,
-                "search"         to Lucide.Search,
-                "logIn"          to Lucide.LogIn,
-                "log-in"         to Lucide.LogIn,
-                "plusCircle"     to Lucide.PlusCircle,
-                "plus-circle"    to Lucide.PlusCircle,
-                "messageCircle"  to Lucide.MessageCircle,
-                "message-circle" to Lucide.MessageCircle,
-                "user"           to Lucide.User,
-                "bell"           to Lucide.Bell,
-                "settings"       to Lucide.Settings,
-                "heart"          to Lucide.Heart,
-                "bookmark"       to Lucide.Bookmark,
-                "calendar"       to Lucide.Calendar,
-                "camera"         to Lucide.Camera,
-                "image"          to Lucide.Image,
-                "mail"           to Lucide.Mail,
-                "map"            to Lucide.Map,
-                "mapPin"         to Lucide.MapPin,
-                "map-pin"        to Lucide.MapPin,
-                "menu"           to Lucide.Menu,
-                "phone"          to Lucide.Phone,
-                "star"           to Lucide.Star,
+                "house"          to Icons.Outlined.Home,
+                "home"           to Icons.Outlined.Home,
+                "search"         to Icons.Outlined.Search,
+                "logIn"          to Icons.AutoMirrored.Outlined.Login,
+                "log-in"         to Icons.AutoMirrored.Outlined.Login,
+                "plusCircle"     to Icons.Outlined.AddCircle,
+                "plus-circle"    to Icons.Outlined.AddCircle,
+                "messageCircle"  to Icons.Outlined.ChatBubble,
+                "message-circle" to Icons.Outlined.ChatBubble,
+                "user"           to Icons.Outlined.Person,
+                "bell"           to Icons.Outlined.Notifications,
+                "settings"       to Icons.Outlined.Settings,
+                "heart"          to Icons.Outlined.Favorite,
+                "bookmark"       to Icons.Outlined.Bookmark,
+                "calendar"       to Icons.Outlined.CalendarToday,
+                "camera"         to Icons.Outlined.Camera,
+                "image"          to Icons.Outlined.Image,
+                "mail"           to Icons.Outlined.Mail,
+                "map"            to Icons.Outlined.Map,
+                "mapPin"         to Icons.Outlined.LocationOn,
+                "map-pin"        to Icons.Outlined.LocationOn,
+                "menu"           to Icons.Outlined.Menu,
+                "phone"          to Icons.Outlined.Phone,
+                "star"           to Icons.Outlined.Star,
             )
         }
     }

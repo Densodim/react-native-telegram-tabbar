@@ -69,6 +69,6 @@ dependencies {
   implementation 'androidx.compose.material3:material3'
   implementation 'androidx.activity:activity-compose:1.9.3'
 
-  // Lucide icons for Compose
-  implementation 'br.com.devsrsouza.compose.icons:lucide:1.0.0'
+  // Material Icons Extended (part of Compose BOM — guaranteed available, covers all needed tab icons)
+  implementation 'androidx.compose.material:material-icons-extended'
 }
