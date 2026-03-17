@@ -16,6 +16,7 @@
  */
 
 import UIKit
+import React
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Data models (mirror TypeScript spec; numeric fields come in as String)
@@ -202,7 +203,7 @@ struct TabBarTheme {
 
     // MARK: Public API (called from TelegramTabBarViewManager)
 
-    @objc func setTabs(_ newTabs: [TabData]) {
+    func setTabs(_ newTabs: [TabData]) {
         tabs = newTabs
         rebuildTabViews()
     }
@@ -214,7 +215,7 @@ struct TabBarTheme {
         animateColorTransition(old: old, new: index)
     }
 
-    @objc func setThemeColors(_ newTheme: TabBarTheme) {
+    func setThemeColors(_ newTheme: TabBarTheme) {
         theme = newTheme
         applyThemeToAll()
     }
