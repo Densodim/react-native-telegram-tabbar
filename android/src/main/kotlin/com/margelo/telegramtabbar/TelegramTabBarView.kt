@@ -170,7 +170,7 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
 
     private val pillDrawable = GradientDrawable().apply {
         setColor(Color.argb(0xA3, 0, 0, 0))
-        cornerRadius = this@TelegramTabBarView.cornerRadius
+        setCornerRadius(this@TelegramTabBarView.cornerRadius)
     }
 
     // Layer 0: frosted-glass blur pill
