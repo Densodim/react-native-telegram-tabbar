@@ -15,7 +15,7 @@
 #import <React/RCTViewManager.h>
 #import <React/RCTBridgeModule.h>
 
-RCT_EXTERN_MODULE(TelegramTabBarViewManager, RCTViewManager)
+@interface RCT_EXTERN_MODULE(TelegramTabBarViewManager, RCTViewManager)
 
 // ── Tab data ─────────────────────────────────────────────────────────────────
 /// Array of tab descriptor objects: { key, title, svgPaths? }
@@ -47,3 +47,5 @@ RCT_EXPORT_VIEW_PROPERTY(onTabPress, RCTBubblingEventBlock)
 
 /// Fired on long press: nativeEvent.key = long-pressed tab key.
 RCT_EXPORT_VIEW_PROPERTY(onTabLongPress, RCTBubblingEventBlock)
+
+@end
