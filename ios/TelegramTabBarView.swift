@@ -93,10 +93,10 @@ struct TabData {
 
 /// Colour theme passed from JavaScript.
 struct TabBarTheme {
-    var backgroundColor: String = "#1C1C1E"
-    var activeColor: String     = "#FFFFFF"
-    var inactiveColor: String   = "#636366"
-    var indicatorColor: String  = "#0A84FF"
+    var backgroundColor: String = "#000000"
+    var activeColor: String     = "#111111"
+    var inactiveColor: String   = "#A9ABB1"
+    var indicatorColor: String  = "#111111"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -388,10 +388,7 @@ private final class TabButtonView: UIView {
         iconView.setColor(color)
         label.textColor = color
 
-        // Bold label weight when active — mirrors Android implementation
-        label.font = active
-            ? .systemFont(ofSize: 10, weight: .semibold)
-            : .systemFont(ofSize: 10, weight: .medium)
+        label.font = .systemFont(ofSize: 10, weight: .medium)
     }
 }
 

@@ -1,12 +1,11 @@
 buildscript {
-  // Match the app's Kotlin/AGP versions (react-native 0.83 / Expo SDK 55)
   ext.kotlin_version = '2.1.20'
   repositories {
     google()
     mavenCentral()
   }
   dependencies {
-    classpath 'com.android.tools.build:gradle:8.12.0'
+    classpath 'com.android.tools.build:gradle:8.7.0'
     classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     // Compose Compiler Gradle plugin — required when buildFeatures.compose = true in Kotlin 2.0+
     classpath "org.jetbrains.kotlin:compose-compiler-gradle-plugin:$kotlin_version"
@@ -35,12 +34,12 @@ android {
 
   kotlinOptions {
     jvmTarget = '17'
+    freeCompilerArgs += ["-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"]
   }
 
   buildFeatures {
     compose true
   }
-  // composeOptions removed — Kotlin 2.0+ bundles the compiler in the plugin above
 
   sourceSets {
     main {
@@ -60,7 +59,6 @@ dependencies {
   implementation "androidx.core:core-ktx:1.15.0"
   implementation 'com.qmdeve.blurview:core:1.1.4'
 
-  // Jetpack Compose (BOM aligns all Compose library versions)
   def composeBom = platform('androidx.compose:compose-bom:2025.01.00')
   implementation composeBom
   implementation 'androidx.compose.ui:ui'
@@ -68,7 +66,5 @@ dependencies {
   implementation 'androidx.compose.runtime:runtime'
   implementation 'androidx.compose.material3:material3'
   implementation 'androidx.activity:activity-compose:1.9.3'
-
-  // Material Icons Extended (part of Compose BOM — guaranteed available, covers all needed tab icons)
-  implementation 'androidx.compose.material:material-icons-extended'
+  implementation 'com.composables:icons-lucide-android:2.2.1'
 }

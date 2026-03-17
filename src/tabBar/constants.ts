@@ -16,7 +16,7 @@
  * Высота плавающей панели вкладок в dp.
  * Height of the floating tab bar in dp.
  */
-export const TAB_BAR_HEIGHT = 56;
+export const TAB_BAR_HEIGHT = 60;
 
 /**
  * Горизонтальный отступ плавающей панели от краёв экрана в dp.
@@ -37,15 +37,15 @@ export const FLOATING_MARGIN_BOTTOM = 12;
 export const EXTRA_PADDING = 8;
 
 /**
- * Тема по умолчанию (светлая).
- * Default (light) theme.
+ * Тема по умолчанию.
+ * Default theme — dark pill, Text/Primary/Stronger active, Text/Primary/Weak inactive.
  *
  * Используется, когда пользователь не передаёт проп theme в TelegramTabBar.
  * Used when the consumer does not pass a theme prop to TelegramTabBar.
  */
 export const DEFAULT_THEME = {
-  backgroundColor: '#FFFFFF',
-  activeColor: '#007AFF',
-  inactiveColor: '#3C3C43',
-  indicatorColor: '#007AFF',
+  backgroundColor: '#000000',
+  activeColor: '#111111',
+  inactiveColor: '#A9ABB1',
+  indicatorColor: '#111111',
 } as const;

@@ -5,7 +5,7 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Color
-import android.graphics.GradientDrawable
+import android.graphics.drawable.GradientDrawable
 import android.graphics.Outline
 import android.view.Gravity
 import android.view.View
@@ -15,9 +15,7 @@ import android.view.ViewTreeObserver
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,24 +37,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color as ComposeColor
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Login
-import androidx.compose.material.icons.outlined.*
+import com.composables.icons.lucide.R as LucideR
 import com.qmdeve.blurview.base.BaseBlurViewGroup
 import com.qmdeve.blurview.widget.BlurViewGroup
 import kotlin.math.max
@@ -109,9 +102,9 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
 
     // Theme
     private var bgColor: Int = Color.BLACK
-    private var activeColor: Int = Color.parseColor("#007AFF")
-    private var inactiveColor: Int = Color.parseColor("#3C3C43")
-    private var indicatorColor: Int = Color.parseColor("#007AFF")
+    private var activeColor: Int = Color.parseColor("#111111")    // Text/Primary/Stronger (icon + text active)
+    private var inactiveColor: Int = Color.parseColor("#A9ABB1")  // Text/Primary/Weak
+    private var indicatorColor: Int = Color.parseColor("#111111")
 
     // Dimensions (pixels)
     private val density = context.resources.displayMetrics.density
@@ -128,42 +121,40 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     // ── Compose reactive state ───────────────────────────────────────────
     private val tabsState           = mutableStateOf<List<TabItem>>(emptyList())
     private val activeIndexState    = mutableStateOf(0)
-    private val activeColorIntState = mutableStateOf(Color.parseColor("#007AFF"))
-    private val inactiveColorIntState   = mutableStateOf(Color.parseColor("#3C3C43"))
-    private val indicatorColorIntState  = mutableStateOf(Color.parseColor("#007AFF"))
+    private val activeColorIntState = mutableStateOf(Color.parseColor("#111111"))
+    private val inactiveColorIntState   = mutableStateOf(Color.parseColor("#A9ABB1"))
+    private val indicatorColorIntState  = mutableStateOf(Color.parseColor("#111111"))
     private val badgesState         = mutableStateOf<Map<String, Int>>(emptyMap())
     private val dotBadgesState      = mutableStateOf<Set<String>>(emptySet())
 
     companion object {
-        /** camelCase icon name → Material ImageVector. Add entries here to support more icons. */
-        private val LUCIDE_ICON_MAP: Map<String, ImageVector> by lazy {
-            mapOf(
-                "house"          to Icons.Outlined.Home,
-                "home"           to Icons.Outlined.Home,
-                "search"         to Icons.Outlined.Search,
-                "logIn"          to Icons.AutoMirrored.Outlined.Login,
-                "log-in"         to Icons.AutoMirrored.Outlined.Login,
-                "plusCircle"     to Icons.Outlined.AddCircle,
-                "plus-circle"    to Icons.Outlined.AddCircle,
-                "messageCircle"  to Icons.Outlined.ChatBubble,
-                "message-circle" to Icons.Outlined.ChatBubble,
-                "user"           to Icons.Outlined.Person,
-                "bell"           to Icons.Outlined.Notifications,
-                "settings"       to Icons.Outlined.Settings,
-                "heart"          to Icons.Outlined.Favorite,
-                "bookmark"       to Icons.Outlined.Bookmark,
-                "calendar"       to Icons.Outlined.CalendarToday,
-                "camera"         to Icons.Outlined.Camera,
-                "image"          to Icons.Outlined.Image,
-                "mail"           to Icons.Outlined.Mail,
-                "map"            to Icons.Outlined.Map,
-                "mapPin"         to Icons.Outlined.LocationOn,
-                "map-pin"        to Icons.Outlined.LocationOn,
-                "menu"           to Icons.Outlined.Menu,
-                "phone"          to Icons.Outlined.Phone,
-                "star"           to Icons.Outlined.Star,
-            )
-        }
+        /** camelCase icon name → Lucide drawable resource ID. */
+        private val LUCIDE_ICON_MAP: Map<String, Int> = mapOf(
+            "house"          to LucideR.drawable.lucide_ic_house,
+            "home"           to LucideR.drawable.lucide_ic_house,
+            "search"         to LucideR.drawable.lucide_ic_search,
+            "logIn"          to LucideR.drawable.lucide_ic_log_in,
+            "log-in"         to LucideR.drawable.lucide_ic_log_in,
+            "plusCircle"     to LucideR.drawable.lucide_ic_circle_plus,
+            "plus-circle"    to LucideR.drawable.lucide_ic_circle_plus,
+            "messageCircle"  to LucideR.drawable.lucide_ic_message_circle,
+            "message-circle" to LucideR.drawable.lucide_ic_message_circle,
+            "user"           to LucideR.drawable.lucide_ic_user,
+            "bell"           to LucideR.drawable.lucide_ic_bell,
+            "settings"       to LucideR.drawable.lucide_ic_settings,
+            "heart"          to LucideR.drawable.lucide_ic_heart,
+            "bookmark"       to LucideR.drawable.lucide_ic_bookmark,
+            "calendar"       to LucideR.drawable.lucide_ic_calendar,
+            "camera"         to LucideR.drawable.lucide_ic_camera,
+            "image"          to LucideR.drawable.lucide_ic_image,
+            "mail"           to LucideR.drawable.lucide_ic_mail,
+            "map"            to LucideR.drawable.lucide_ic_map,
+            "mapPin"         to LucideR.drawable.lucide_ic_map_pin,
+            "map-pin"        to LucideR.drawable.lucide_ic_map_pin,
+            "menu"           to LucideR.drawable.lucide_ic_menu,
+            "phone"          to LucideR.drawable.lucide_ic_phone,
+            "star"           to LucideR.drawable.lucide_ic_star,
+        )
     }
 
     // ── Layers ────────────────────────────────────────────────────────────
@@ -173,7 +164,7 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         setCornerRadius(this@TelegramTabBarView.cornerRadius)
     }
 
-    // Layer 0: frosted-glass blur pill
+    // Layer 0: frosted-glass blur pill — NO elevation here so it doesn't overlap contentOverlay
     private val blurBackground = BlurViewGroup(context, null).also { v ->
         v.background = pillDrawable
         v.outlineProvider = object : ViewOutlineProvider() {
@@ -183,14 +174,14 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         }
         v.clipToOutline = true
         v.clipChildren  = true
-        v.elevation     = elevationDp
         v.blurRounds    = 4
         v.setDownsampleFactor(4.0f)
     }
 
     // Layer 1: Compose UI (tabs, white card, indicator, badges)
+    // Use DisposeOnDetachedFromWindowOrReleasedFromPool — safe for non-Fragment/Activity hosts
     private val contentOverlay = ComposeView(context).apply {
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
         setContent { TabBarContent() }
     }
 
@@ -201,6 +192,8 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         setBackgroundColor(Color.TRANSPARENT)
         clipChildren  = false
         clipToPadding = false
+        // Shadow on the outer container so it floats above content; children draw in addView order
+        elevation = elevationDp
 
         addView(blurBackground, LayoutParams(LayoutParams.MATCH_PARENT, tabBarHeight).apply {
             gravity      = Gravity.BOTTOM
@@ -227,7 +220,23 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         ViewCompat.requestApplyInsets(this)
-        post { setupBlur() }
+        post {
+            // Fabric completes its layout pass BEFORE onAttachedToWindow(), so our
+            // onMeasure guard skipped measuring Compose children. requestLayout() won't
+            // cause Fabric to re-measure. Instead, directly re-measure+layout this view
+            // using the bounds already set by Fabric, so ComposeView gets properly measured
+            // now that windowToken is available for the Recomposer.
+            val w = width
+            val h = height
+            if (w > 0 && h > 0) {
+                measure(
+                    MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
+                )
+                layout(left, top, right, bottom)
+            }
+            setupBlur()
+        }
     }
 
     override fun onDetachedFromWindow() {
@@ -237,15 +246,10 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
 
     private var isBlurInitialized = false
 
-    private fun pillColor(bg: Int): Int {
-        val lum = (0.2126 * Color.red(bg) + 0.7152 * Color.green(bg) + 0.0722 * Color.blue(bg)) / 255.0
-        return if (lum < 0.4) Color.argb(0xA3, 48, 48, 56) else Color.argb(0xA3, 0, 0, 0)
-    }
+    // #000000 at 64% opacity (0xA3 = 163 = 64% of 255)
+    private fun pillColor(@Suppress("UNUSED_PARAMETER") bg: Int): Int = Color.argb(0xA3, 0, 0, 0)
 
-    private fun blurOverlayColor(bg: Int): Int {
-        val lum = (0.2126 * Color.red(bg) + 0.7152 * Color.green(bg) + 0.0722 * Color.blue(bg)) / 255.0
-        return if (lum < 0.4) Color.argb(0xA3, 48, 48, 56) else Color.argb(0xA3, 0, 0, 0)
-    }
+    private fun blurOverlayColor(@Suppress("UNUSED_PARAMETER") bg: Int): Int = Color.argb(0xA3, 0, 0, 0)
 
     private fun setupBlur() {
         if (isBlurInitialized) return
@@ -373,6 +377,14 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
         val h = tabBarHeight + floatingMarginBottom + bottomInset + (8 * density).roundToInt()
+        if (!isAttachedToWindow) {
+            // React Native Fabric can call measure() before onAttachedToWindow().
+            // Skip measuring Compose children here to avoid the "Cannot locate windowRecomposer"
+            // crash — ComposeView needs an attached window to find the Activity's LifecycleOwner.
+            // Fabric will trigger a proper layout pass after attachment.
+            setMeasuredDimension(w, h)
+            return
+        }
         super.onMeasure(
             MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
@@ -389,18 +401,10 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         val activeIndex      by activeIndexState
         val activeColorInt   by activeColorIntState
         val inactiveColorInt by inactiveColorIntState
-        val indicatorColorInt by indicatorColorIntState
         val badges           by badgesState
         val dotBadges        by dotBadgesState
 
         val haptic = LocalHapticFeedback.current
-
-        // Smooth indicator position (in tab-index units; Canvas converts to pixels)
-        val indicatorAnim by animateFloatAsState(
-            targetValue    = activeIndex.toFloat(),
-            animationSpec  = tween(durationMillis = 250),
-            label          = "indicator"
-        )
 
         Box(modifier = Modifier.fillMaxSize()) {
 
@@ -409,11 +413,19 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                 tabs.forEachIndexed { index, tab ->
                     val isActive = index == activeIndex
 
+                    // Icon tint: Text/Primary/Stronger (#111111) when active, Text/Primary/Weak (#A9ABB1) when inactive
                     val iconColor by animateColorAsState(
                         targetValue   = if (isActive) activeColorInt.toComposeColor()
                                         else inactiveColorInt.toComposeColor(),
                         animationSpec = tween(durationMillis = 200),
-                        label         = "tabColor_$index"
+                        label         = "tabIconColor_$index"
+                    )
+                    // Text color: Text/Primary/Stronger (#111111) active, Text/Primary/Weak (#A9ABB1) inactive
+                    val textColor by animateColorAsState(
+                        targetValue   = if (isActive) ComposeColor(0xFF111111)
+                                        else inactiveColorInt.toComposeColor(),
+                        animationSpec = tween(durationMillis = 200),
+                        label         = "tabTextColor_$index"
                     )
 
                     Box(
@@ -447,24 +459,26 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            val iv = LUCIDE_ICON_MAP[tab.iconName]
-                            if (iv != null) {
+                            val iconResId = LUCIDE_ICON_MAP[tab.iconName]
+                            if (iconResId != null) {
                                 Icon(
-                                    imageVector      = iv,
+                                    painter          = painterResource(iconResId),
                                     contentDescription = tab.title,
                                     tint             = iconColor,
-                                    modifier         = Modifier.size(22.dp)
+                                    modifier         = Modifier.size(24.dp)
                                 )
                             }
                             if (tab.title.isNotEmpty()) {
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    text       = tab.title,
-                                    color      = iconColor,
-                                    fontSize   = 10.sp,
-                                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-                                    maxLines   = 1,
-                                    overflow   = TextOverflow.Ellipsis
+                                    text          = tab.title,
+                                    color         = textColor,
+                                    fontSize      = 10.sp,
+                                    fontWeight    = FontWeight.Medium,
+                                    lineHeight    = 10.sp,
+                                    letterSpacing = 0.sp,
+                                    maxLines      = 1,
+                                    overflow      = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -501,20 +515,6 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
                 }
             }
 
-            // ── Sliding indicator line at top of pill ──────────────────
-            if (tabs.isNotEmpty()) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val tabWidth = size.width / tabs.size
-                    val iw = tabWidth * 0.45f
-                    val ix = indicatorAnim * tabWidth + (tabWidth - iw) / 2f
-                    drawRoundRect(
-                        color       = indicatorColorInt.toComposeColor(),
-                        topLeft     = Offset(ix, 0f),
-                        size        = Size(iw, 3.dp.toPx()),
-                        cornerRadius = CornerRadius(1.5.dp.toPx())
-                    )
-                }
-            }
         }
     }
 
@@ -526,4 +526,5 @@ class TelegramTabBarView(context: Context) : FrameLayout(context) {
         blue  = Color.blue(this)  / 255f,
         alpha = Color.alpha(this) / 255f
     )
+
 }

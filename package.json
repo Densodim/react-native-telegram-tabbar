@@ -1,6 +1,6 @@
 {
   "name": "react-native-telegram-tabbar",
-  "version": "1.0.9",
+  "version": "1.0.12",
   "description": "Native floating tab bar with blur effect — Telegram-style, iOS + Android. Custom rendering: Kotlin Canvas (Android) + CoreGraphics/UIBlurEffect (iOS).",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -26,7 +26,8 @@
     "android/src/",
     "android/build.gradle",
     "ios/",
-    "*.podspec"
+    "*.podspec",
+    "react-native.config.js"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
