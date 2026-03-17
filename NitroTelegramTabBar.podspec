@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.author           = package["author"]
   s.source           = { :git => "https://github.com/milautonomos/react-native-telegram-tabbar.git", :tag => s.version.to_s }
 
-  s.platforms        = { :ios => "16.0" }
+  s.platforms        = { :ios => "15.1" }
   s.swift_version    = "5.9"
   s.requires_arc     = true
 
