@@ -16,7 +16,7 @@
  */
 
 import UIKit
-import React
+import ExpoModulesCore
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Data models (mirror TypeScript spec; numeric fields come in as String)
@@ -107,7 +107,7 @@ struct TabBarTheme {
 /// The root floating-pill tab bar view.
 /// Designed to fill the full screen (set style position: 'absolute', fill parent).
 /// Internally it positions the pill at the bottom with floating margins.
-@objc class TelegramTabBarView: UIView {
+class TelegramTabBarView: ExpoView {
 
     // MARK: Subviews
     private let blurView: UIVisualEffectView     // Layer 1 — frosted glass background
@@ -121,9 +121,9 @@ struct TabBarTheme {
     private var bottomInsetPt: CGFloat = 0
     private(set) var isTabBarVisible: Bool = true
 
-    // MARK: RN event callbacks
-    @objc var onTabPress: RCTBubblingEventBlock?
-    @objc var onTabLongPress: RCTBubblingEventBlock?
+    // MARK: Event dispatchers (ExpoModulesCore)
+    let onTabPress = EventDispatcher()
+    let onTabLongPress = EventDispatcher()
 
     // MARK: Layout constants (points)
     private let floatingMarginH: CGFloat      = 16
@@ -133,15 +133,13 @@ struct TabBarTheme {
 
     // MARK: Init
 
-    override init(frame: CGRect) {
+    required init(appContext: AppContext) {
         let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
         blurView    = UIVisualEffectView(effect: blurEffect)
         contentView = UIView()
-        super.init(frame: frame)
+        super.init(appContext: appContext)
         setupView()
     }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
 
     // MARK: Setup
 
@@ -281,14 +279,14 @@ struct TabBarTheme {
         let idx = tv.tag
         guard idx >= 0, idx < tabs.count else { return }
         animateBounce(tv)
-        onTabPress?(["key": tabs[idx].key])
+        onTabPress(["key": tabs[idx].key])
     }
 
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began, let tv = gesture.view else { return }
         let idx = tv.tag
         guard idx >= 0, idx < tabs.count else { return }
-        onTabLongPress?(["key": tabs[idx].key])
+        onTabLongPress(["key": tabs[idx].key])
     }
 
     /// Scale bounce: grow → slightly shrink → back to identity (Telegram-style).

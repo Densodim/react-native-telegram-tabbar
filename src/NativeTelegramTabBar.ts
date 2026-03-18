@@ -1,11 +1,11 @@
 /**
  * @file NativeTelegramTabBar.ts
- * @description Native component bridge — works on both iOS and Android
- *              via requireNativeComponent (React Native ViewManager).
- *              No Expo dependency.
+ * @description Native component bridge — works on both iOS and Android.
+ *              iOS: ExpoModulesCore (TelegramTabBarModule.swift / ExpoView).
+ *              Android: React Native ViewManager (TelegramTabBarViewManager.kt).
  */
 
-import { requireNativeComponent } from 'react-native'
+import { requireNativeViewManager } from 'expo-modules-core'
 import type { ViewProps } from 'react-native'
 import type { TabItem, TabBarTheme } from './types/tab'
 import type { TabLongPressEvent, TabPressEvent } from './types/events'
@@ -33,8 +33,9 @@ export interface NativeTelegramTabBarProps extends ViewProps {
 
 /**
  * Native React component wrapping the TelegramTabBarView on Android/iOS.
- * The name 'TelegramTabBar' must match getName() in TelegramTabBarViewManager
- * (Android) and the RCT_EXTERN_MODULE name in TelegramTabBarViewManager.m (iOS).
+ * The name 'TelegramTabBar' must match:
+ *   - getName() in TelegramTabBarViewManager.kt (Android)
+ *   - Name("TelegramTabBar") in TelegramTabBarModule.swift (iOS)
  */
 export const NativeTelegramTabBarView =
-  requireNativeComponent<NativeTelegramTabBarProps>('TelegramTabBar')
+  requireNativeViewManager<NativeTelegramTabBarProps>('TelegramTabBar')
