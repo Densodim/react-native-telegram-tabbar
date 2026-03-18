@@ -19,10 +19,20 @@
 // by the Apple linker when building with use_frameworks! :linkage => :static.
 // Adding +load to a class in this translation unit prevents the linker from
 // removing the entire object file, ensuring the constructor runs at startup.
+// Forward-declare RCTRegisterModule so we can call it from +load directly.
+// This guarantees registration even in New Architecture / bridgeless mode where
+// __attribute__((constructor)) functions from RCT_EXTERN_MODULE may not be called.
+extern void RCTRegisterModule(Class);
+
 @interface TelegramTabBarModuleLoader : NSObject
 @end
 @implementation TelegramTabBarModuleLoader
-+ (void)load {}
++ (void)load {
+    Class cls = NSClassFromString(@"TelegramTabBarViewManager");
+    if (cls) {
+        RCTRegisterModule(cls);
+    }
+}
 @end
 
 @interface RCT_EXTERN_MODULE(TelegramTabBarViewManager, RCTViewManager)
