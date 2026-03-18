@@ -1,7 +1,8 @@
 {
   "platforms": ["ios", "android"],
   "ios": {
-    "modules": ["TelegramTabBarModule"]
+    "modules": ["TelegramTabBarModule"],
+    "podspecPath": "NitroTelegramTabBar.podspec"
   },
   "android": {
     "modules": []
