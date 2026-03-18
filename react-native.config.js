@@ -6,10 +6,9 @@ module.exports = {
         packageImportPath:
           'import com.margelo.telegramtabbar.NitroTelegramTabBarPackage;',
       },
-      ios: {
-        podspecPath: 'NitroTelegramTabBar.podspec',
-        configurations: [],
-      },
+      // iOS is handled by expo-module.config.json + use_expo_modules! autolinking.
+      // Defining it here would cause use_native_modules! to add the pod a second time.
+      ios: null,
     },
   },
 }
