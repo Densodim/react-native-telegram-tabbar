@@ -130,7 +130,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         private val LUCIDE_ICON_MAP: Map<String, Int> = mapOf(
             "house"          to LucideR.drawable.lucide_ic_house,
             "users"          to LucideR.drawable.lucide_ic_users,
-            "list-todo"      to LucideR.drawable.`lucide_ic_list-todo`,
+            "list-todo"      to LucideR.drawable.lucide_ic_list_todo,
             "wallet"         to LucideR.drawable.lucide_ic_wallet,
             "home"           to LucideR.drawable.lucide_ic_house,
             "search"         to LucideR.drawable.lucide_ic_search,
