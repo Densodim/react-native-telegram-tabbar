@@ -7,7 +7,7 @@ module.exports = {
           'import com.margelo.telegramtabbar.NitroTelegramTabBarPackage;',
       },
       ios: {
-        componentDir: 'ios',
+        podspecPath: 'NitroTelegramTabBar.podspec',
         configurations: [],
       },
     },
