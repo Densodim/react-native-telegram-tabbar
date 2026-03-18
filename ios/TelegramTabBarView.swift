@@ -133,7 +133,17 @@ class TelegramTabBarView: ExpoView {
 
     // MARK: Init
 
-    required init(appContext: AppContext) {
+    /// Called by Fabric (New Architecture) when it allocates the view via `init(frame:)`.
+    @objc override init(frame: CGRect) {
+        let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+        blurView    = UIVisualEffectView(effect: blurEffect)
+        contentView = UIView()
+        super.init(frame: frame)
+        setupView()
+    }
+
+    /// Called by ExpoModulesCore when it creates the view with an AppContext.
+    required init(appContext: AppContext? = nil) {
         let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
         blurView    = UIVisualEffectView(effect: blurEffect)
         contentView = UIView()
