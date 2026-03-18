@@ -16,6 +16,12 @@ final class TelegramTabBarViewManager: RCTViewManager {
 
     // MARK: - Boilerplate
 
+    // Explicitly declare the JS component name.
+    // Without this override, RCTComponentData derives the name by stripping the
+    // "Manager" suffix from the class name → "TelegramTabBarView", which does NOT
+    // match requireNativeComponent('TelegramTabBar') on the JS side.
+    @objc override class func moduleName() -> String! { "TelegramTabBar" }
+
     override class func requiresMainQueueSetup() -> Bool { true }
 
     override var methodQueue: DispatchQueue { .main }
