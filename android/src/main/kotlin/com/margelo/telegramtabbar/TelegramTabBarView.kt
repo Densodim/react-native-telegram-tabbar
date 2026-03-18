@@ -8,7 +8,6 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.graphics.Outline
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -86,7 +85,6 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         val title: String,
         val icon: String? = null,
         val svgPaths: List<SvgElement>? = null,
-        /** Lucide icon name (camelCase). E.g. "house", "search", "messageCircle". */
         val iconName: String? = null
     )
 
@@ -94,11 +92,15 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     internal val onTabPress by EventDispatcher()
     internal val onTabLongPress by EventDispatcher()
 
+    // ── shouldUseAndroidLayout = true is CRITICAL for ExpoView (LinearLayout):
+    // Without it, requestLayout() is silently ignored by Fabric/React Native.
+    // With it, ExpoView.requestLayout() automatically posts measureAndLayout().
+    override val shouldUseAndroidLayout = true
+
     // ── Internal state ────────────────────────────────────────────────────
     private var tabs: List<TabItem> = emptyList()
     private var activeIndex: Int = 0
 
-    // Theme
     private var bgColor: Int = Color.BLACK
     private var activeColor: Int = Color.parseColor("#111111")
     private var inactiveColor: Int = Color.parseColor("#A9ABB1")
@@ -119,14 +121,13 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     // ── Compose reactive state ────────────────────────────────────────────
     private val tabsState           = mutableStateOf<List<TabItem>>(emptyList())
     private val activeIndexState    = mutableStateOf(0)
-    private val activeColorIntState = mutableStateOf(Color.parseColor("#111111"))
+    private val activeColorIntState     = mutableStateOf(Color.parseColor("#111111"))
     private val inactiveColorIntState   = mutableStateOf(Color.parseColor("#A9ABB1"))
     private val indicatorColorIntState  = mutableStateOf(Color.parseColor("#111111"))
     private val badgesState         = mutableStateOf<Map<String, Int>>(emptyMap())
     private val dotBadgesState      = mutableStateOf<Set<String>>(emptySet())
 
     companion object {
-        /** camelCase icon name → Lucide drawable resource ID. */
         private val LUCIDE_ICON_MAP: Map<String, Int> = mapOf(
             "house"          to LucideR.drawable.lucide_ic_house,
             "users"          to LucideR.drawable.lucide_ic_users,
@@ -189,24 +190,15 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         clipToPadding = false
         elevation = elevationDp
 
-        addView(blurBackground, LayoutParams(LayoutParams.MATCH_PARENT, tabBarHeight).apply {
-            gravity      = Gravity.BOTTOM
-            leftMargin   = floatingMarginH
-            rightMargin  = floatingMarginH
-            bottomMargin = floatingMarginBottom
-        })
-
-        addView(contentOverlay, LayoutParams(LayoutParams.MATCH_PARENT, tabBarHeight).apply {
-            gravity      = Gravity.BOTTOM
-            leftMargin   = floatingMarginH
-            rightMargin  = floatingMarginH
-            bottomMargin = floatingMarginBottom
-        })
+        // LayoutParams don't drive positioning here (we override onLayout manually),
+        // but we still need to add children so they are part of the view tree.
+        addView(blurBackground, LayoutParams(0, 0))
+        addView(contentOverlay, LayoutParams(0, 0))
 
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
             val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
             bottomInset = nav.bottom
-            updateMargins()
+            requestLayout()
             insets
         }
     }
@@ -214,23 +206,53 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         ViewCompat.requestApplyInsets(this)
-        post {
-            val w = width
-            val h = height
-            if (w > 0 && h > 0) {
-                measure(
-                    MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
-                )
-                layout(left, top, right, bottom)
-            }
-            setupBlur()
-        }
+        // shouldUseAndroidLayout=true means requestLayout() posts measureAndLayout() automatically,
+        // but we also need a layout pass to position contentOverlay (needs isAttachedToWindow=true).
+        requestLayout()
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         isBlurInitialized = false
+    }
+
+    // ExpoView extends LinearLayout — its default layout places children side-by-side,
+    // giving contentOverlay width=0. We override onLayout to stack both children at the
+    // same pill position (blurBackground behind, contentOverlay on top).
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        val w = right - left
+        val h = bottom - top
+
+        val pillLeft   = floatingMarginH
+        val pillRight  = w - floatingMarginH
+        val pillWidth  = pillRight - pillLeft
+        val pillTop    = h - tabBarHeight - bottomInset - floatingMarginBottom
+        val pillBottom = pillTop + tabBarHeight
+
+        if (pillWidth > 0 && pillTop >= 0) {
+            val wSpec = MeasureSpec.makeMeasureSpec(pillWidth, MeasureSpec.EXACTLY)
+            val hSpec = MeasureSpec.makeMeasureSpec(tabBarHeight, MeasureSpec.EXACTLY)
+
+            blurBackground.measure(wSpec, hSpec)
+            blurBackground.layout(pillLeft, pillTop, pillRight, pillBottom)
+
+            // ComposeView.measure() needs windowRecomposer → only safe after onAttachedToWindow.
+            // Fabric may call onLayout before attachment; requestLayout() in onAttachedToWindow
+            // schedules a second pass (via shouldUseAndroidLayout) once the recomposer is ready.
+            if (isAttachedToWindow) {
+                contentOverlay.measure(wSpec, hSpec)
+                contentOverlay.layout(pillLeft, pillTop, pillRight, pillBottom)
+            }
+        }
+
+        if (isAttachedToWindow && !isBlurInitialized) post { setupBlur() }
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val w = MeasureSpec.getSize(widthMeasureSpec)
+        val h = tabBarHeight + floatingMarginBottom + bottomInset + (8 * density).roundToInt()
+        // Report our total size to Fabric/parent. Children are positioned in onLayout().
+        setMeasuredDimension(w, h)
     }
 
     private var isBlurInitialized = false
@@ -287,14 +309,6 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         return null
     }
 
-    private fun updateMargins() {
-        listOf(blurBackground, contentOverlay).forEach { v ->
-            (v.layoutParams as LayoutParams).bottomMargin = floatingMarginBottom + bottomInset
-            v.layoutParams = v.layoutParams
-        }
-        requestLayout()
-    }
-
     // ── Public API ─────────────────────────────────────────────────────────
 
     fun setTabs(newTabs: List<TabItem>) {
@@ -329,7 +343,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     fun setBottomInset(inset: Int) {
         if (bottomInset == 0 && inset > 0) {
             bottomInset = (inset * density).roundToInt()
-            updateMargins()
+            requestLayout()
         }
     }
 
@@ -352,19 +366,6 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
             })
             start()
         }
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val w = MeasureSpec.getSize(widthMeasureSpec)
-        val h = tabBarHeight + floatingMarginBottom + bottomInset + (8 * density).roundToInt()
-        if (!isAttachedToWindow) {
-            setMeasuredDimension(w, h)
-            return
-        }
-        super.onMeasure(
-            MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
-        )
     }
 
     // ══════════════════════════════════════════════════════════════════════
