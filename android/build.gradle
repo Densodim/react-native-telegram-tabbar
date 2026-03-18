@@ -7,14 +7,12 @@ buildscript {
   dependencies {
     classpath 'com.android.tools.build:gradle:8.7.0'
     classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-    // Compose Compiler Gradle plugin — required when buildFeatures.compose = true in Kotlin 2.0+
     classpath "org.jetbrains.kotlin:compose-compiler-gradle-plugin:$kotlin_version"
   }
 }
 
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
-// Kotlin 2.0+ requires the Compose Compiler Gradle plugin instead of composeOptions
 apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
 android {
@@ -58,6 +56,9 @@ dependencies {
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
   implementation "androidx.core:core-ktx:1.15.0"
   implementation 'com.qmdeve.blurview:core:1.1.4'
+
+  // ExpoModulesCore — always present in Expo app builds
+  implementation project(':expo-modules-core')
 
   def composeBom = platform('androidx.compose:compose-bom:2025.01.00')
   implementation composeBom

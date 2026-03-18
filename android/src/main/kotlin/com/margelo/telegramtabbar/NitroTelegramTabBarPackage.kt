@@ -1,19 +1,4 @@
 package com.margelo.telegramtabbar
 
-import com.facebook.react.ReactPackage
-import com.facebook.react.bridge.NativeModule
-import com.facebook.react.bridge.ReactApplicationContext
-import com.facebook.react.uimanager.ViewManager
-
-class NitroTelegramTabBarPackage : ReactPackage {
-
-  override fun createNativeModules(
-    reactContext: ReactApplicationContext,
-  ): List<NativeModule> = emptyList()
-
-  override fun createViewManagers(
-    reactContext: ReactApplicationContext,
-  ): List<ViewManager<*, *>> = listOf(
-    TelegramTabBarViewManager(reactContext)
-  )
-}
+// Legacy ReactPackage stub — module is now registered via ExpoModulesCore (TelegramTabBarModule).
+// Kept to avoid breaking any cached references; has no effect at runtime.

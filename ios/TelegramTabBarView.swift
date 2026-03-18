@@ -89,8 +89,40 @@ extension SvgElement {
 struct TabData {
     let key: String
     let title: String
-    let svgPaths: [SvgElement]
+    let iconName: String?       // Lucide icon name → mapped to SF Symbol on iOS
+    let svgPaths: [SvgElement]  // Fallback SVG rendering when iconName is absent
 }
+
+// MARK: - Lucide → SF Symbol name mapping
+private let lucideToSFSymbol: [String: String] = [
+    "house":          "house",
+    "home":           "house",
+    "users":          "person.2",
+    "user":           "person",
+    "list-todo":      "checklist",
+    "wallet":         "creditcard",
+    "search":         "magnifyingglass",
+    "logIn":          "arrow.right.to.line",
+    "log-in":         "arrow.right.to.line",
+    "plusCircle":     "plus.circle",
+    "plus-circle":    "plus.circle",
+    "messageCircle":  "bubble.right",
+    "message-circle": "bubble.right",
+    "bell":           "bell",
+    "settings":       "gearshape",
+    "heart":          "heart",
+    "bookmark":       "bookmark",
+    "calendar":       "calendar",
+    "camera":         "camera",
+    "image":          "photo",
+    "mail":           "envelope",
+    "map":            "map",
+    "mapPin":         "mappin",
+    "map-pin":        "mappin",
+    "menu":           "line.3.horizontal",
+    "phone":          "phone",
+    "star":           "star",
+]
 
 /// Colour theme passed from JavaScript.
 struct TabBarTheme {
@@ -337,25 +369,42 @@ class TelegramTabBarView: ExpoView {
 // MARK: - TabButtonView
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// A single tab cell: SVG icon above a text label.
+/// A single tab cell: icon above a text label, with optional white active card.
 private final class TabButtonView: UIView {
 
-    private let iconView = SvgIconView()
-    private let label    = UILabel()
+    // White rounded-rect card shown behind active tab (matches Android behaviour)
+    private let activeCardView = UIView()
+    // SF Symbol image view (used when iconName is available)
+    private let sfImageView    = UIImageView()
+    // SVG fallback view (used when no iconName / no SF Symbol match)
+    private let svgIconView    = SvgIconView()
+    private let label          = UILabel()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
 
-        // Icon view
-        addSubview(iconView)
+        // Active card — white rounded rect, hidden by default
+        activeCardView.backgroundColor = .white
+        activeCardView.layer.cornerRadius = 10
+        activeCardView.clipsToBounds = true
+        activeCardView.isHidden = true
+        addSubview(activeCardView)
+
+        // SF Symbol image view
+        sfImageView.contentMode = .scaleAspectFit
+        sfImageView.isHidden = true
+        addSubview(sfImageView)
+
+        // SVG fallback
+        addSubview(svgIconView)
 
         // Label
-        label.textAlignment          = .center
-        label.font                   = .systemFont(ofSize: 10, weight: .medium)
+        label.textAlignment             = .center
+        label.font                      = .systemFont(ofSize: 10, weight: .medium)
         label.adjustsFontSizeToFitWidth = true
-        label.minimumScaleFactor     = 0.8
-        label.numberOfLines          = 1
+        label.minimumScaleFactor        = 0.8
+        label.numberOfLines             = 1
         addSubview(label)
     }
 
@@ -364,18 +413,24 @@ private final class TabButtonView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
 
+        // Active card fills cell with 6pt inset (same as Android padding(6.dp))
+        activeCardView.frame = bounds.insetBy(dx: 6, dy: 6)
+
         let iconSize: CGFloat = 24
         let labelH:   CGFloat = 14
         let gap:      CGFloat = 2
         let totalH            = iconSize + gap + labelH
         let startY            = (bounds.height - totalH) / 2
 
-        iconView.frame = CGRect(
+        let iconFrame = CGRect(
             x:      (bounds.width - iconSize) / 2,
             y:      startY,
             width:  iconSize,
             height: iconSize
         )
+        sfImageView.frame  = iconFrame
+        svgIconView.frame  = iconFrame
+
         label.frame = CGRect(
             x:      4,
             y:      startY + iconSize + gap,
@@ -386,18 +441,33 @@ private final class TabButtonView: UIView {
 
     func configure(tab: TabData, isActive: Bool, theme: TabBarTheme) {
         label.text = tab.title
-        iconView.setSvgPaths(tab.svgPaths)
+        // Resolve icon: SF Symbol from iconName > SVG paths
+        if let name = tab.iconName,
+           let sfName = lucideToSFSymbol[name],
+           let img = UIImage(systemName: sfName) {
+            sfImageView.image   = img
+            sfImageView.isHidden = false
+            svgIconView.isHidden = true
+        } else {
+            svgIconView.setSvgPaths(tab.svgPaths)
+            svgIconView.isHidden = false
+            sfImageView.isHidden = true
+        }
         setActive(isActive, theme: theme)
     }
 
     func setActive(_ active: Bool, theme: TabBarTheme) {
         let color = active
-            ? UIColor(hexString: theme.activeColor)   ?? .white
-            : UIColor(hexString: theme.inactiveColor) ?? UIColor(white: 0.4, alpha: 1)
-        iconView.setColor(color)
-        label.textColor = color
+            ? UIColor(hexString: theme.activeColor)   ?? UIColor(red: 0.067, green: 0.067, blue: 0.067, alpha: 1)
+            : UIColor(hexString: theme.inactiveColor) ?? UIColor(white: 0.67, alpha: 1)
 
+        sfImageView.tintColor = color
+        svgIconView.setColor(color)
+        label.textColor = color
         label.font = .systemFont(ofSize: 10, weight: .medium)
+
+        // Show/hide white active card
+        activeCardView.isHidden = !active
     }
 }
 

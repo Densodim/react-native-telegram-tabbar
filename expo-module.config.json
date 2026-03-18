@@ -5,6 +5,6 @@
     "podspecPath": "NitroTelegramTabBar.podspec"
   },
   "android": {
-    "modules": []
+    "modules": ["com.margelo.telegramtabbar.TelegramTabBarModule"]
   }
 }
