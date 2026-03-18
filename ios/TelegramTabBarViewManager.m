@@ -15,6 +15,16 @@
 #import <React/RCTViewManager.h>
 #import <React/RCTBridgeModule.h>
 
+// RCT_EXTERN_MODULE uses __attribute__((constructor)) which can be dead-stripped
+// by the Apple linker when building with use_frameworks! :linkage => :static.
+// Adding +load to a class in this translation unit prevents the linker from
+// removing the entire object file, ensuring the constructor runs at startup.
+@interface TelegramTabBarModuleLoader : NSObject
+@end
+@implementation TelegramTabBarModuleLoader
++ (void)load {}
+@end
+
 @interface RCT_EXTERN_MODULE(TelegramTabBarViewManager, RCTViewManager)
 
 // ── Tab data ─────────────────────────────────────────────────────────────────
