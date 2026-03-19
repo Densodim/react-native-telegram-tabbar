@@ -159,9 +159,9 @@ class TelegramTabBarView: ExpoView {
 
     // MARK: Layout constants (points)
     private let floatingMarginH: CGFloat      = 16
-    private let floatingMarginBottom: CGFloat = 12
+    private let floatingMarginBottom: CGFloat = 8
     private let barHeight: CGFloat            = 60
-    private let cornerRadius: CGFloat         = 28
+    private let cornerRadius: CGFloat         = 16
 
     // MARK: Init
 
