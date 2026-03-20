@@ -98,6 +98,8 @@ private let lucideToSFSymbol: [String: String] = [
     "house":          "house",
     "home":           "house",
     "users":          "person.2",
+    "task":           "layout.list",
+    "chat":             "message.square.text",
     "user":           "person",
     "list-todo":      "checklist",
     "wallet":         "creditcard",

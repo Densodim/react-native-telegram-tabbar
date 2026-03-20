@@ -132,6 +132,8 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
             "house"          to LucideR.drawable.lucide_ic_house,
             "users"          to LucideR.drawable.lucide_ic_users,
             "list-todo"      to LucideR.drawable.lucide_ic_list_todo,
+            "task"           to LucideR.drawable.lucide_ic_layout_list,
+            "chat"           to LucideR.drawable.lucide_ic_message_square_text,
             "wallet"         to LucideR.drawable.lucide_ic_wallet,
             "home"           to LucideR.drawable.lucide_ic_house,
             "search"         to LucideR.drawable.lucide_ic_search,

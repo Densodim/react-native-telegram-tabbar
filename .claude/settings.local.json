@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Home/work/modules/react-native-telegram-tabbar -type f -name *example* -o -name *App*)"
+    ]
+  }
+}
