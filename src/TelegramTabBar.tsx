@@ -71,6 +71,11 @@ export function TelegramTabBar({
     [visibleRoutes, descriptors, focusRevision],
   )
 
+  const nativeViewKey = React.useMemo(() => {
+    const routeSignature = visibleRoutes.map(route => route.key).join('|')
+    return `${routeSignature}:${focusRevision}`
+  }, [visibleRoutes, focusRevision])
+
   const rawActiveIndex = visibleRoutes.findIndex(
     r => r.key === state.routes[state.index].key,
   )
@@ -103,6 +108,7 @@ export function TelegramTabBar({
     <View style={styles.container}>
       {/* Native layer renders pill + blur + icons + labels + white card + badges */}
       <NativeTelegramTabBarView
+        key={nativeViewKey}
         tabs={nativeTabs}
         activeIndex={activeIndex}
         theme={theme}
