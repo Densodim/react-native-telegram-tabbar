@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.graphics.BitmapFactory
+import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.core.view.ViewCompat
@@ -63,6 +65,7 @@ import com.qmdeve.blurview.widget.BlurViewGroup
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
+import java.io.File
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -400,6 +403,31 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         }
     }
 
+    private suspend fun loadBitmap(source: String): android.graphics.Bitmap? =
+        withContext(Dispatchers.IO) {
+            try {
+                val uri = Uri.parse(source)
+                when (uri.scheme?.lowercase()) {
+                    "http", "https" -> {
+                        val connection = java.net.URL(source).openConnection().apply {
+                            connectTimeout = 5000
+                            readTimeout = 5000
+                        }
+                        connection.getInputStream().use(BitmapFactory::decodeStream)
+                    }
+                    "content", "file", "android.resource" -> {
+                        context.contentResolver.openInputStream(uri)?.use(BitmapFactory::decodeStream)
+                    }
+                    else -> {
+                        val file = File(source)
+                        if (file.exists()) file.inputStream().use(BitmapFactory::decodeStream) else null
+                    }
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
     // ══════════════════════════════════════════════════════════════════════
     // ═══ Compose content ═════════════════════════════════════════════════
     // ══════════════════════════════════════════════════════════════════════
@@ -464,12 +492,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
                             if (!tab.icon.isNullOrEmpty()) {
                                 // Avatar image: load from URL asynchronously
                                 val bitmap by produceState<android.graphics.Bitmap?>(null, tab.icon) {
-                                    value = withContext(Dispatchers.IO) {
-                                        try {
-                                            val url = java.net.URL(tab.icon)
-                                            BitmapFactory.decodeStream(url.openStream())
-                                        } catch (_: Exception) { null }
-                                    }
+                                    value = loadBitmap(tab.icon)
                                 }
                                 if (bitmap != null) {
                                     Image(
@@ -477,6 +500,13 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
                                         contentDescription = tab.title,
                                         modifier          = Modifier.size(24.dp).clip(CircleShape),
                                         contentScale      = ContentScale.Crop,
+                                    )
+                                } else if (iconResId != null) {
+                                    Icon(
+                                        painter           = painterResource(iconResId),
+                                        contentDescription = tab.title,
+                                        tint              = iconColor,
+                                        modifier          = Modifier.size(24.dp)
                                     )
                                 }
                             } else if (iconResId != null) {
@@ -508,22 +538,32 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(top = 4.dp, end = 10.dp)
+                                    .padding(top = 6.dp, end = 18.dp)
                             ) {
                                 if (isDot && count == 0) {
-                                    Box(Modifier.size(8.dp).background(ComposeColor(0xFFFF3B30), CircleShape))
+                                    Box(
+                                        Modifier
+                                            .size(8.dp)
+                                            .background(ComposeColor(0xFF51CFC4), CircleShape)
+                                    )
                                 } else {
                                     Box(
                                         modifier = Modifier
-                                            .background(ComposeColor(0xFFFF3B30), RoundedCornerShape(50))
-                                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                                            .height(16.dp)
+                                            .widthIn(min = 16.dp)
+                                            .clip(RoundedCornerShape(999.dp))
+                                            .background(ComposeColor(0xFF51CFC4), RoundedCornerShape(999.dp))
+                                            .padding(horizontal = 4.dp, vertical = 0.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text       = if (count > 99) "99+" else count.toString(),
                                             color      = ComposeColor.White,
-                                            fontSize   = 9.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontSize   = 12.sp,
+                                            fontWeight = FontWeight.Normal,
+                                            lineHeight = 13.sp,
+                                            maxLines   = 1,
+                                            modifier   = Modifier.widthIn(min = 0.dp)
                                         )
                                     }
                                 }
