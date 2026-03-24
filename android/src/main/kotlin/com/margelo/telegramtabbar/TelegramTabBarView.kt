@@ -194,7 +194,10 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     }
 
     private val contentOverlay = ComposeView(context).apply {
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        // The tab bar is often detached when navigating to screens that hide it.
+        // Recreating the composition on the next attach is more reliable than
+        // trying to revive the previous one, which could come back without text/icons.
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         setContent { TabBarContent() }
     }
 
@@ -223,6 +226,9 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         // combined with referentialEqualityPolicy, always triggers recomposition.
         tabsState.value = ArrayList(tabs)
         activeIndexState.value = activeIndex
+        activeColorIntState.value = activeColor
+        inactiveColorIntState.value = inactiveColor
+        indicatorColorIntState.value = indicatorColor
         super.onAttachedToWindow()
         ViewCompat.requestApplyInsets(this)
         requestLayout()
@@ -230,7 +236,10 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         // calls ensureCompositionCreated in its own onAttachedToWindow, which runs AFTER ours).
         // This guarantees the now-live composition recomposes even if the recomposer was
         // paused/cancelled during detach and swallowed the pre-super push.
-        post { tabsState.value = ArrayList(tabs) }
+        post {
+            tabsState.value = ArrayList(tabs)
+            activeIndexState.value = activeIndex
+        }
     }
 
     override fun onDetachedFromWindow() {
