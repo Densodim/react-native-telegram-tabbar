@@ -182,7 +182,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     }
 
     private val contentOverlay = ComposeView(context).apply {
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent { TabBarContent() }
     }
 
@@ -211,6 +211,11 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         // shouldUseAndroidLayout=true means requestLayout() posts measureAndLayout() automatically,
         // but we also need a layout pass to position contentOverlay (needs isAttachedToWindow=true).
         requestLayout()
+        // Re-push current state into Compose after reattachment (e.g. returning from a stack screen).
+        // DisposeOnViewTreeLifecycleDestroyed keeps the composition alive across detach/attach cycles,
+        // but state values may have been set while detached — ensure Compose sees the latest values.
+        tabsState.value = tabs
+        activeIndexState.value = activeIndex
     }
 
     override fun onDetachedFromWindow() {
@@ -314,7 +319,6 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     // ── Public API ─────────────────────────────────────────────────────────
 
     fun setTabs(newTabs: List<TabItem>) {
-        if (tabs == newTabs) return
         tabs = newTabs
         tabsState.value = newTabs
     }
