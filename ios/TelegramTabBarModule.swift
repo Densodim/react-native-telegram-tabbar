@@ -11,9 +11,10 @@ public final class TelegramTabBarModule: Module {
                     guard let key   = dict["key"]   as? String,
                           let title = dict["title"] as? String else { return nil }
                     let iconName = dict["iconName"] as? String
+                    let icon     = dict["icon"]     as? String
                     let svgPaths = (dict["svgPaths"] as? [[String: Any]] ?? [])
                         .map { SvgElement(from: $0) }
-                    return TabData(key: key, title: title, iconName: iconName, svgPaths: svgPaths)
+                    return TabData(key: key, title: title, iconName: iconName, icon: icon, svgPaths: svgPaths)
                 }
                 view.setTabs(tabData)
             }

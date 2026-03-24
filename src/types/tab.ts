@@ -52,6 +52,13 @@ export interface TabItem {
    * Used by the native Android layer (compose-icons/lucide) to render the icon.
    */
   iconName?: string;
+
+  /**
+   * @internal Revision counter incremented on navigator focus.
+   * Forces Fabric to detect a prop change and re-call setTabs on the native view
+   * even when the tab content is structurally identical after screen detach/reattach.
+   */
+  _rev?: number;
 }
 
 /**

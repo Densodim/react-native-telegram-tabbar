@@ -15,6 +15,7 @@ import android.view.ViewTreeObserver
 import android.view.animation.PathInterpolator
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,10 +35,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -46,6 +52,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.BitmapFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.composables.icons.lucide.R as LucideR
@@ -119,7 +128,10 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     private var visibilityAnimator: ValueAnimator? = null
 
     // ── Compose reactive state ────────────────────────────────────────────
-    private val tabsState           = mutableStateOf<List<TabItem>>(emptyList())
+    // referentialEqualityPolicy: ANY write (even same content, new list object) triggers
+    // recomposition. This is essential for the post{} re-push on reattachment to work
+    // even when the tab data hasn't changed structurally.
+    private val tabsState           = mutableStateOf<List<TabItem>>(emptyList(), referentialEqualityPolicy())
     private val activeIndexState    = mutableStateOf(0)
     private val activeColorIntState     = mutableStateOf(Color.parseColor("#111111"))
     private val inactiveColorIntState   = mutableStateOf(Color.parseColor("#A9ABB1"))
@@ -206,16 +218,19 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     }
 
     override fun onAttachedToWindow() {
+        // Push state before super so the very first composition (or any surviving composition)
+        // starts with the latest data. Uses ArrayList to ensure a new object reference which,
+        // combined with referentialEqualityPolicy, always triggers recomposition.
+        tabsState.value = ArrayList(tabs)
+        activeIndexState.value = activeIndex
         super.onAttachedToWindow()
         ViewCompat.requestApplyInsets(this)
-        // shouldUseAndroidLayout=true means requestLayout() posts measureAndLayout() automatically,
-        // but we also need a layout pass to position contentOverlay (needs isAttachedToWindow=true).
         requestLayout()
-        // Re-push current state into Compose after reattachment (e.g. returning from a stack screen).
-        // DisposeOnViewTreeLifecycleDestroyed keeps the composition alive across detach/attach cycles,
-        // but state values may have been set while detached — ensure Compose sees the latest values.
-        tabsState.value = tabs
-        activeIndexState.value = activeIndex
+        // Safety net: re-push after the framework has attached all children (contentOverlay
+        // calls ensureCompositionCreated in its own onAttachedToWindow, which runs AFTER ours).
+        // This guarantees the now-live composition recomposes even if the recomposer was
+        // paused/cancelled during detach and swallowed the pre-super push.
+        post { tabsState.value = ArrayList(tabs) }
     }
 
     override fun onDetachedFromWindow() {
@@ -320,7 +335,9 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
 
     fun setTabs(newTabs: List<TabItem>) {
         tabs = newTabs
-        tabsState.value = newTabs
+        // ArrayList wrapping gives a new reference each call; with referentialEqualityPolicy
+        // this guarantees a recomposition even if newTabs is structurally identical.
+        tabsState.value = ArrayList(newTabs)
     }
 
     fun setActiveIndex(index: Int) {
@@ -435,7 +452,25 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
                             verticalArrangement = Arrangement.Center
                         ) {
                             val iconResId = LUCIDE_ICON_MAP[tab.iconName]
-                            if (iconResId != null) {
+                            if (!tab.icon.isNullOrEmpty()) {
+                                // Avatar image: load from URL asynchronously
+                                val bitmap by produceState<android.graphics.Bitmap?>(null, tab.icon) {
+                                    value = withContext(Dispatchers.IO) {
+                                        try {
+                                            val url = java.net.URL(tab.icon)
+                                            BitmapFactory.decodeStream(url.openStream())
+                                        } catch (_: Exception) { null }
+                                    }
+                                }
+                                if (bitmap != null) {
+                                    Image(
+                                        bitmap            = bitmap!!.asImageBitmap(),
+                                        contentDescription = tab.title,
+                                        modifier          = Modifier.size(24.dp).clip(CircleShape),
+                                        contentScale      = ContentScale.Crop,
+                                    )
+                                }
+                            } else if (iconResId != null) {
                                 Icon(
                                     painter           = painterResource(iconResId),
                                     contentDescription = tab.title,

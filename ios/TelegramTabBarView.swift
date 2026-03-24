@@ -90,6 +90,7 @@ struct TabData {
     let key: String
     let title: String
     let iconName: String?       // Lucide icon name → mapped to SF Symbol on iOS
+    let icon: String?           // Remote image URL for avatar (takes priority over iconName)
     let svgPaths: [SvgElement]  // Fallback SVG rendering when iconName is absent
 }
 
@@ -207,6 +208,20 @@ class TelegramTabBarView: ExpoView {
         layer.shadowOffset  = CGSize(width: 0, height: 4)
         layer.shadowRadius  = 16
         layer.shadowOpacity = 0.35
+    }
+
+    // MARK: Window attach / detach
+
+    /// Called when the view is added to or removed from a window.
+    /// react-native-screens detaches the view tree during navigation; on reattach we
+    /// rebuild tab views to restore icons and text that UIKit preserves across
+    /// detach/reattach (no composition lifecycle issue like Android Compose, but
+    /// Fabric may not re-send unchanged props, so this is the iOS safety net).
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil && !tabs.isEmpty {
+            rebuildTabViews()
+        }
     }
 
     // MARK: Layout
@@ -375,12 +390,14 @@ class TelegramTabBarView: ExpoView {
 private final class TabButtonView: UIView {
 
     // White rounded-rect card shown behind active tab (matches Android behaviour)
-    private let activeCardView = UIView()
+    private let activeCardView  = UIView()
+    // Remote avatar image view (shown when tab.icon URL is provided)
+    private let avatarImageView = UIImageView()
     // SF Symbol image view (used when iconName is available)
-    private let sfImageView    = UIImageView()
+    private let sfImageView     = UIImageView()
     // SVG fallback view (used when no iconName / no SF Symbol match)
-    private let svgIconView    = SvgIconView()
-    private let label          = UILabel()
+    private let svgIconView     = SvgIconView()
+    private let label           = UILabel()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -392,6 +409,12 @@ private final class TabButtonView: UIView {
         activeCardView.clipsToBounds = true
         activeCardView.isHidden = true
         addSubview(activeCardView)
+
+        // Avatar image view (remote URL, circular clip)
+        avatarImageView.contentMode = .scaleAspectFill
+        avatarImageView.clipsToBounds = true
+        avatarImageView.isHidden = true
+        addSubview(avatarImageView)
 
         // SF Symbol image view
         sfImageView.contentMode = .scaleAspectFit
@@ -430,8 +453,10 @@ private final class TabButtonView: UIView {
             width:  iconSize,
             height: iconSize
         )
-        sfImageView.frame  = iconFrame
-        svgIconView.frame  = iconFrame
+        sfImageView.frame   = iconFrame
+        svgIconView.frame   = iconFrame
+        avatarImageView.frame = iconFrame
+        avatarImageView.layer.cornerRadius = iconSize / 2
 
         label.frame = CGRect(
             x:      4,
@@ -443,19 +468,35 @@ private final class TabButtonView: UIView {
 
     func configure(tab: TabData, isActive: Bool, theme: TabBarTheme) {
         label.text = tab.title
-        // Resolve icon: SF Symbol from iconName > SVG paths
-        if let name = tab.iconName,
-           let sfName = lucideToSFSymbol[name],
-           let img = UIImage(systemName: sfName) {
-            sfImageView.image   = img
-            sfImageView.isHidden = false
-            svgIconView.isHidden = true
+
+        // Priority: avatar URL > SF Symbol (iconName) > SVG paths
+        if let urlString = tab.icon, !urlString.isEmpty {
+            avatarImageView.isHidden = false
+            sfImageView.isHidden     = true
+            svgIconView.isHidden     = true
+            loadAvatar(from: urlString)
+        } else if let name = tab.iconName,
+                  let sfName = lucideToSFSymbol[name],
+                  let img = UIImage(systemName: sfName) {
+            sfImageView.image        = img
+            sfImageView.isHidden     = false
+            svgIconView.isHidden     = true
+            avatarImageView.isHidden = true
         } else {
             svgIconView.setSvgPaths(tab.svgPaths)
-            svgIconView.isHidden = false
-            sfImageView.isHidden = true
+            svgIconView.isHidden     = false
+            sfImageView.isHidden     = true
+            avatarImageView.isHidden = true
         }
         setActive(isActive, theme: theme)
+    }
+
+    private func loadAvatar(from urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let data, let image = UIImage(data: data) else { return }
+            DispatchQueue.main.async { self?.avatarImageView.image = image }
+        }.resume()
     }
 
     func setActive(_ active: Bool, theme: TabBarTheme) {

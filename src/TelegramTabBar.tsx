@@ -36,21 +36,39 @@ export function TelegramTabBar({
 
   const visibleRoutes = useVisibleRoutes(state.routes, descriptors)
 
+  // When the navigator regains focus (e.g. returning from a stack screen that hides
+  // the tab bar), increment this counter so nativeTabs produces a new array reference.
+  // A new reference forces Fabric to re-commit the tabs prop to the native view,
+  // which restores icons and labels that the native layer lost during detach/reattach.
+  const [focusRevision, setFocusRevision] = React.useState(0)
+  React.useEffect(() => {
+    const unsubscribe = (navigation as any).addListener('focus', () => {
+      setFocusRevision(r => r + 1)
+    })
+    return unsubscribe
+  }, [navigation])
+
   // Each tab passes iconName + title to the native Compose layer.
   const nativeTabs = React.useMemo(
     () =>
       visibleRoutes.map(r => {
         const opts = descriptors[r.key].options as Record<string, unknown>
         const iconName = (opts.tabBarIconName as string | undefined) ?? undefined
+        const icon = (opts.tabBarImage as string | undefined) ?? undefined
         const title =
           typeof opts.tabBarLabel === 'string'
             ? opts.tabBarLabel
             : typeof opts.title === 'string'
               ? opts.title
               : r.name
-        return { key: r.name, title, iconName }
+        // _rev changes on every focus event so Fabric always sees a content diff
+        // and calls setTabs — even when the structural content is unchanged.
+        return { key: r.name, title, iconName, icon, _rev: focusRevision }
       }),
-    [visibleRoutes, descriptors],
+    // focusRevision intentionally forces a new array on each focus so Fabric
+    // re-sends tabs to the native view after screen detach/reattach.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleRoutes, descriptors, focusRevision],
   )
 
   const rawActiveIndex = visibleRoutes.findIndex(
