@@ -29,6 +29,7 @@ public final class TelegramTabBarModule: Module {
                 if let v = dict?["activeColor"]     { t.activeColor     = v }
                 if let v = dict?["inactiveColor"]   { t.inactiveColor   = v }
                 if let v = dict?["indicatorColor"]  { t.indicatorColor  = v }
+                if let v = dict?["badgeColor"]      { t.badgeColor      = v }
                 view.setThemeColors(t)
             }
 

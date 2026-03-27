@@ -117,6 +117,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     private var activeColor: Int = Color.parseColor("#111111")
     private var inactiveColor: Int = Color.parseColor("#A9ABB1")
     private var indicatorColor: Int = Color.parseColor("#111111")
+    private var badgeColor: Int = Color.parseColor("#51CFC4")
 
     // Dimensions (pixels)
     private val density = context.resources.displayMetrics.density
@@ -139,6 +140,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
     private val activeColorIntState     = mutableStateOf(Color.parseColor("#111111"))
     private val inactiveColorIntState   = mutableStateOf(Color.parseColor("#A9ABB1"))
     private val indicatorColorIntState  = mutableStateOf(Color.parseColor("#111111"))
+    private val badgeColorIntState      = mutableStateOf(Color.parseColor("#51CFC4"))
     private val badgesState         = mutableStateOf<Map<String, Int>>(emptyMap())
     private val dotBadgesState      = mutableStateOf<Set<String>>(emptySet())
 
@@ -232,6 +234,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         activeColorIntState.value = activeColor
         inactiveColorIntState.value = inactiveColor
         indicatorColorIntState.value = indicatorColor
+        badgeColorIntState.value = badgeColor
         super.onAttachedToWindow()
         ViewCompat.requestApplyInsets(this)
         requestLayout()
@@ -291,15 +294,16 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
 
     private var isBlurInitialized = false
 
-    private fun pillColor(@Suppress("UNUSED_PARAMETER") bg: Int): Int = Color.argb(0xA3, 0, 0, 0)
-    private fun blurOverlayColor(@Suppress("UNUSED_PARAMETER") bg: Int): Int = Color.argb(0xA3, 0, 0, 0)
+    // Pill и blur overlay всегда тёмные — дизайн предусматривает frosted-glass эффект.
+    private fun pillColor(): Int = Color.argb(0xA3, 0, 0, 0)
+    private fun blurOverlayColor(): Int = Color.argb(0xA3, 0, 0, 0)
 
     private fun setupBlur() {
         if (isBlurInitialized) return
         swapBlurRootToSibling()
         blurBackground.setBlurRadius(25f)
         blurBackground.setCornerRadius(cornerRadius)
-        blurBackground.setOverlayColor(blurOverlayColor(bgColor))
+        blurBackground.setOverlayColor(blurOverlayColor())
         isBlurInitialized = true
     }
 
@@ -366,13 +370,15 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         dotBadgesState.value = newDotBadges
     }
 
-    fun setThemeColors(bg: Int, active: Int, inactive: Int, indicator: Int) {
-        bgColor = bg; activeColor = active; inactiveColor = inactive; indicatorColor = indicator
-        activeColorIntState.value     = active
-        inactiveColorIntState.value   = inactive
-        indicatorColorIntState.value  = indicator
-        if (isBlurInitialized) blurBackground.setOverlayColor(blurOverlayColor(bg))
-        else pillDrawable.setColor(pillColor(bg))
+    fun setThemeColors(bg: Int, active: Int, inactive: Int, indicator: Int, badge: Int) {
+        bgColor = bg; activeColor = active; inactiveColor = inactive
+        indicatorColor = indicator; badgeColor = badge
+        activeColorIntState.value    = active
+        inactiveColorIntState.value  = inactive
+        indicatorColorIntState.value = indicator
+        badgeColorIntState.value     = badge
+        if (isBlurInitialized) blurBackground.setOverlayColor(blurOverlayColor())
+        else pillDrawable.setColor(pillColor())
     }
 
     fun setBottomInset(inset: Int) {
@@ -438,6 +444,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
         val activeIndex      by activeIndexState
         val activeColorInt   by activeColorIntState
         val inactiveColorInt by inactiveColorIntState
+        val badgeColorInt    by badgeColorIntState
         val badges           by badgesState
         val dotBadges        by dotBadgesState
 
@@ -454,7 +461,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
                         label         = "tabIconColor_$index"
                     )
                     val textColor by animateColorAsState(
-                        targetValue   = if (isActive) ComposeColor(0xFF111111) else inactiveColorInt.toComposeColor(),
+                        targetValue   = if (isActive) activeColorInt.toComposeColor() else inactiveColorInt.toComposeColor(),
                         animationSpec = tween(durationMillis = 200),
                         label         = "tabTextColor_$index"
                     )
@@ -535,16 +542,20 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
                         val count = badges[tab.key] ?: 0
                         val isDot = dotBadges.contains(tab.key)
                         if (count > 0 || isDot) {
+                            // Active tab: бейдж у угла белой карточки (padding 6dp от краёв ячейки).
+                            // Inactive tab: бейдж у правого края иконки (24dp иконка по центру).
+                            val badgeTopPadding = if (isActive) 4.dp else 6.dp
+                            val badgeEndPadding = if (isActive) 4.dp else 18.dp
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(top = 6.dp, end = 18.dp)
+                                    .padding(top = badgeTopPadding, end = badgeEndPadding)
                             ) {
                                 if (isDot && count == 0) {
                                     Box(
                                         Modifier
                                             .size(8.dp)
-                                            .background(ComposeColor(0xFF51CFC4), CircleShape)
+                                            .background(badgeColorInt.toComposeColor(), CircleShape)
                                     )
                                 } else {
                                     Box(
@@ -552,7 +563,7 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
                                             .height(16.dp)
                                             .widthIn(min = 16.dp)
                                             .clip(RoundedCornerShape(999.dp))
-                                            .background(ComposeColor(0xFF51CFC4), RoundedCornerShape(999.dp))
+                                            .background(badgeColorInt.toComposeColor(), RoundedCornerShape(999.dp))
                                             .padding(horizontal = 4.dp, vertical = 0.dp),
                                         contentAlignment = Alignment.Center
                                     ) {

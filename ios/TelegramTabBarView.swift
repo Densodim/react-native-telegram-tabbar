@@ -133,6 +133,7 @@ struct TabBarTheme {
     var activeColor: String     = "#111111"
     var inactiveColor: String   = "#A9ABB1"
     var indicatorColor: String  = "#111111"
+    var badgeColor: String      = "#51CFC4"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,13 +157,17 @@ class TelegramTabBarView: ExpoView {
     private var bottomInsetPt: CGFloat = 0
     private(set) var isTabBarVisible: Bool = true
 
+    // Badge state
+    private var badgeData: [String: (count: Int, isDot: Bool)] = [:]
+    private var badgeUIColor: UIColor = UIColor(red: 0.318, green: 0.812, blue: 0.769, alpha: 1)
+
     // MARK: Event dispatchers (ExpoModulesCore)
     let onTabPress = EventDispatcher()
     let onTabLongPress = EventDispatcher()
 
     // MARK: Layout constants (points)
     private let floatingMarginH: CGFloat      = 16
-    private let floatingMarginBottom: CGFloat = 8
+    private let floatingMarginBottom: CGFloat = 12
     private let barHeight: CGFloat            = 60
     private let cornerRadius: CGFloat         = 16
 
@@ -274,7 +279,10 @@ class TelegramTabBarView: ExpoView {
 
     func setThemeColors(_ newTheme: TabBarTheme) {
         theme = newTheme
+        badgeUIColor = UIColor(hexString: newTheme.badgeColor)
+            ?? UIColor(red: 0.318, green: 0.812, blue: 0.769, alpha: 1)
         applyThemeToAll()
+        updateBadgeViews()
     }
 
     @objc func setBottomInset(_ inset: CGFloat) {
@@ -302,11 +310,29 @@ class TelegramTabBarView: ExpoView {
         }
     }
 
-    // MARK: Badges (stub — future milestone)
+    // MARK: Badges
 
     @objc func setBadges(_ badges: [[String: Any]]) {
-        // Reserved for numeric badge / dot-badge rendering.
-        // No-op in this revision; included for ABI stability with ViewManager.
+        badgeData = [:]
+        for badge in badges {
+            guard let key = badge["key"] as? String, !key.isEmpty else { continue }
+            let isDot  = badge["isDot"]  as? Bool ?? false
+            let count  = badge["count"]  as? Int  ?? 0
+            badgeData[key] = (count: count, isDot: isDot)
+        }
+        updateBadgeViews()
+    }
+
+    private func updateBadgeViews() {
+        for (i, tv) in tabViews.enumerated() {
+            guard i < tabs.count else { continue }
+            let key = tabs[i].key
+            if let badge = badgeData[key] {
+                tv.setBadge(count: badge.count, isDot: badge.isDot, color: badgeUIColor)
+            } else {
+                tv.clearBadge()
+            }
+        }
     }
 
     // MARK: Private helpers
@@ -331,6 +357,7 @@ class TelegramTabBarView: ExpoView {
 
         setNeedsLayout()
         layoutIfNeeded()
+        updateBadgeViews()
     }
 
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -399,6 +426,12 @@ private final class TabButtonView: UIView {
     private let svgIconView     = SvgIconView()
     private let label           = UILabel()
 
+    // Badge views
+    private let badgeContainer  = UIView()
+    private let badgeLabel      = UILabel()
+    private var isDotBadge      = false
+    private var isActiveTab     = false
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
@@ -431,6 +464,18 @@ private final class TabButtonView: UIView {
         label.minimumScaleFactor        = 0.8
         label.numberOfLines             = 1
         addSubview(label)
+
+        // Badge container (hidden by default, sits above all content)
+        badgeContainer.isHidden = true
+        badgeContainer.clipsToBounds = true
+        addSubview(badgeContainer)
+
+        // Badge label (numeric text inside container)
+        badgeLabel.textColor     = .white
+        badgeLabel.font          = .systemFont(ofSize: 12, weight: .regular)
+        badgeLabel.textAlignment = .center
+        badgeLabel.isHidden      = true
+        badgeContainer.addSubview(badgeLabel)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -464,6 +509,39 @@ private final class TabButtonView: UIView {
             width:  bounds.width - 8,
             height: labelH
         )
+
+        layoutBadge()
+    }
+
+    private func layoutBadge() {
+        guard !badgeContainer.isHidden else { return }
+
+        if isDotBadge {
+            let size: CGFloat = 8
+            // Active: угол белой карточки (card inset = 6pt).
+            // Inactive: правый край иконки.
+            let rightEdge: CGFloat = isActiveTab ? (bounds.width - 4) : (bounds.width / 2 + 12 + 4)
+            let topEdge:   CGFloat = isActiveTab ? 4 : 6
+            badgeContainer.frame = CGRect(x: rightEdge - size, y: topEdge, width: size, height: size)
+            badgeContainer.layer.cornerRadius = size / 2
+        } else {
+            let h: CGFloat = 16
+            let text = badgeLabel.text ?? ""
+            let textW = (text as NSString).size(withAttributes: [.font: badgeLabel.font!]).width
+            let w = max(h, textW + 8)
+            // Active: end = 4pt от правого края ячейки.
+            // Inactive: end = 18pt от правого края ячейки.
+            let endPadding: CGFloat = isActiveTab ? 4 : 18
+            let topPadding: CGFloat = isActiveTab ? 4 : 6
+            badgeContainer.frame = CGRect(
+                x: bounds.width - endPadding - w,
+                y: topPadding,
+                width: w,
+                height: h
+            )
+            badgeContainer.layer.cornerRadius = h / 2
+            badgeLabel.frame = badgeContainer.bounds
+        }
     }
 
     func configure(tab: TabData, isActive: Bool, theme: TabBarTheme) {
@@ -500,6 +578,7 @@ private final class TabButtonView: UIView {
     }
 
     func setActive(_ active: Bool, theme: TabBarTheme) {
+        isActiveTab = active
         let color = active
             ? UIColor(hexString: theme.activeColor)   ?? UIColor(red: 0.067, green: 0.067, blue: 0.067, alpha: 1)
             : UIColor(hexString: theme.inactiveColor) ?? UIColor(white: 0.67, alpha: 1)
@@ -511,6 +590,28 @@ private final class TabButtonView: UIView {
 
         // Show/hide white active card
         activeCardView.isHidden = !active
+
+        // Re-position badge based on active state
+        if !badgeContainer.isHidden { setNeedsLayout() }
+    }
+
+    func setBadge(count: Int, isDot: Bool, color: UIColor) {
+        isDotBadge = isDot && count == 0
+        badgeContainer.backgroundColor = color
+        badgeContainer.isHidden = false
+        if isDotBadge {
+            badgeLabel.isHidden = true
+        } else {
+            badgeLabel.isHidden = false
+            badgeLabel.text = count > 99 ? "99+" : "\(count)"
+        }
+        setNeedsLayout()
+    }
+
+    func clearBadge() {
+        badgeContainer.isHidden = true
+        badgeLabel.isHidden = true
+        isDotBadge = false
     }
 }
 

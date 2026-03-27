@@ -95,4 +95,10 @@ export interface TabBarTheme {
    * Color of the sliding indicator strip under the active tab.
    */
   indicatorColor: string;
+
+  /**
+   * Цвет бейджа (числового и точечного).
+   * Color of numeric and dot badges.
+   */
+  badgeColor?: string;
 }

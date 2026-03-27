@@ -26,6 +26,7 @@ class TabBarThemeRecord : Record {
   @Field val activeColor: String? = null
   @Field val inactiveColor: String? = null
   @Field val indicatorColor: String? = null
+  @Field val badgeColor: String? = null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,11 +56,12 @@ class TelegramTabBarModule : Module() {
       }
 
       Prop("theme") { view: TelegramTabBarView, theme: TabBarThemeRecord ->
-        val bgColor       = parseColor(theme.backgroundColor, Color.parseColor("#000000"))
-        val activeColor   = parseColor(theme.activeColor,     Color.parseColor("#111111"))
-        val inactiveColor = parseColor(theme.inactiveColor,   Color.parseColor("#A9ABB1"))
-        val indicatorColor = parseColor(theme.indicatorColor, Color.parseColor("#111111"))
-        view.setThemeColors(bgColor, activeColor, inactiveColor, indicatorColor)
+        val bgColor        = parseColor(theme.backgroundColor, Color.parseColor("#000000"))
+        val activeColor    = parseColor(theme.activeColor,     Color.parseColor("#111111"))
+        val inactiveColor  = parseColor(theme.inactiveColor,   Color.parseColor("#A9ABB1"))
+        val indicatorColor = parseColor(theme.indicatorColor,  Color.parseColor("#111111"))
+        val badgeColor     = parseColor(theme.badgeColor,      Color.parseColor("#51CFC4"))
+        view.setThemeColors(bgColor, activeColor, inactiveColor, indicatorColor, badgeColor)
       }
 
       Prop("bottomInset") { view: TelegramTabBarView, inset: Float ->

@@ -48,4 +48,5 @@ export const DEFAULT_THEME = {
   activeColor: '#111111',
   inactiveColor: '#A9ABB1',
   indicatorColor: '#111111',
+  badgeColor: '#51CFC4',
 } as const;
