@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find /Home/work/modules/react-native-telegram-tabbar -type f -name *example* -o -name *App*)"
+      "Bash(find /Home/work/modules/react-native-telegram-tabbar -type f -name *example* -o -name *App*)",
+      "Bash(find /c/Home/work/autonomus-app/src/hooks -type f -name *.ts -o -name *.tsx)"
     ]
   }
 }

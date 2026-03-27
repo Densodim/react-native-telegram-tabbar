@@ -516,26 +516,20 @@ private final class TabButtonView: UIView {
     private func layoutBadge() {
         guard !badgeContainer.isHidden else { return }
 
+        // Позиция бейджа одинакова для active и inactive — у правого края иконки.
         if isDotBadge {
             let size: CGFloat = 8
-            // Active: угол белой карточки (card inset = 6pt).
-            // Inactive: правый край иконки.
-            let rightEdge: CGFloat = isActiveTab ? (bounds.width - 4) : (bounds.width / 2 + 12 + 4)
-            let topEdge:   CGFloat = isActiveTab ? 4 : 6
-            badgeContainer.frame = CGRect(x: rightEdge - size, y: topEdge, width: size, height: size)
+            let rightEdge: CGFloat = bounds.width / 2 + 12 + 4
+            badgeContainer.frame = CGRect(x: rightEdge - size, y: 6, width: size, height: size)
             badgeContainer.layer.cornerRadius = size / 2
         } else {
             let h: CGFloat = 16
             let text = badgeLabel.text ?? ""
             let textW = (text as NSString).size(withAttributes: [.font: badgeLabel.font!]).width
             let w = max(h, textW + 8)
-            // Active: end = 4pt от правого края ячейки.
-            // Inactive: end = 18pt от правого края ячейки.
-            let endPadding: CGFloat = isActiveTab ? 4 : 18
-            let topPadding: CGFloat = isActiveTab ? 4 : 6
             badgeContainer.frame = CGRect(
-                x: bounds.width - endPadding - w,
-                y: topPadding,
+                x: bounds.width - 18 - w,
+                y: 6,
                 width: w,
                 height: h
             )

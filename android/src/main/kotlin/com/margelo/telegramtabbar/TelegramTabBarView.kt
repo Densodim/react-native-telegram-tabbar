@@ -542,14 +542,11 @@ class TelegramTabBarView(context: Context, appContext: AppContext) : ExpoView(co
                         val count = badges[tab.key] ?: 0
                         val isDot = dotBadges.contains(tab.key)
                         if (count > 0 || isDot) {
-                            // Active tab: бейдж у угла белой карточки (padding 6dp от краёв ячейки).
-                            // Inactive tab: бейдж у правого края иконки (24dp иконка по центру).
-                            val badgeTopPadding = if (isActive) 4.dp else 6.dp
-                            val badgeEndPadding = if (isActive) 4.dp else 18.dp
+                            // Позиция бейджа одинакова для active и inactive — у правого края иконки.
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(top = badgeTopPadding, end = badgeEndPadding)
+                                    .padding(top = 6.dp, end = 18.dp)
                             ) {
                                 if (isDot && count == 0) {
                                     Box(
